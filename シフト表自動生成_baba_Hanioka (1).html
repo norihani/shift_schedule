@@ -1,0 +1,2011 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>シフト表自動生成</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root {
+  --bg: #F7F6F2;
+  --surface: #FFFFFF;
+  --border: #D4D1CA;
+  --text: #28251D;
+  --text-muted: #7A7974;
+  --primary: #01696F;
+  --primary-hover: #0C4E54;
+  --weekend: #FFF8E1;
+  --ng: #FFCDD2;
+  --ng-text: #B71C1C;
+  --hope: #C8E6C9;
+  --hope-text: #1B5E20;
+  --a-color: #C62828;
+  --gray-cell: #EEEEEE;
+  --warning: #E65100;
+  --success: #2E7D32;
+  --swap-bg: #E3F2FD;
+  --swap-border: #1565C0;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'Noto Sans JP', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+}
+
+.container { max-width: 1200px; margin: 0 auto; padding: 24px 16px; }
+
+header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 24px; flex-wrap: wrap; gap: 12px;
+}
+
+h1 { font-size: 20px; font-weight: 700; color: var(--primary); }
+
+.tabs {
+  display: flex; border-bottom: 2px solid var(--border);
+  margin-bottom: 20px; gap: 0; overflow-x: auto;
+}
+
+.tab {
+  padding: 10px 16px; cursor: pointer; border: none; background: none;
+  font-family: inherit; font-size: 13px; font-weight: 500;
+  color: var(--text-muted); border-bottom: 2px solid transparent;
+  margin-bottom: -2px; transition: all .15s; white-space: nowrap;
+}
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+.panel { display: none; }
+.panel.active { display: block; }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 24px; border: none; border-radius: 6px;
+  font-family: inherit; font-size: 14px; font-weight: 500;
+  cursor: pointer; transition: background .15s;
+}
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:hover { background: var(--primary-hover); }
+.btn-outline { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+.btn-outline:hover { background: var(--bg); }
+.btn-sm { padding: 6px 14px; font-size: 12px; }
+.btn-lg { padding: 14px 40px; font-size: 16px; font-weight: 700; border-radius: 8px; }
+
+/* ── テーブル ── */
+table { width: 100%; border-collapse: collapse; font-size: 13px; background: var(--surface); border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+th { background: var(--primary); color: #fff; font-weight: 500; padding: 8px 6px; text-align: center; position: sticky; top: 0; z-index: 2; font-size: 12px; }
+td { padding: 6px; text-align: center; border-bottom: 1px solid var(--border); white-space: nowrap; }
+tr.weekend td { background: var(--weekend); }
+td.gray-cell { background: var(--gray-cell); }
+td.a-member { color: var(--a-color); font-weight: 700; }
+
+/* ── クリック可能シフトセル ── */
+td.clickable { cursor: pointer; position: relative; }
+td.clickable:hover { outline: 2px solid var(--primary); outline-offset: -2px; border-radius: 3px; }
+td.selected-swap { background: var(--swap-bg) !important; outline: 2px solid var(--swap-border); outline-offset: -2px; }
+td.swap-done { background: #E8F5E9 !important; outline: 2px solid #2E7D32; outline-offset: -2px; }
+
+/* ── NG日テーブル ── */
+.ng-table-wrap { overflow-x: auto; max-height: 70vh; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+.ng-table th { font-size: 11px; min-width: 56px; }
+.ng-table td { padding: 3px 2px; }
+
+/* ワンクリックセル */
+.ng-cell {
+  width: 100%; height: 28px; border: none; border-radius: 4px;
+  cursor: pointer; font-size: 11px; font-weight: 500; font-family: inherit;
+  background: transparent; color: var(--text-muted); transition: all .1s;
+  display: flex; align-items: center; justify-content: center;
+  user-select: none;
+}
+.ng-cell:hover { background: #f0f0f0; }
+.ng-cell.val-ng { background: var(--ng); color: var(--ng-text); }
+.ng-cell.val-hope { background: var(--hope); color: var(--hope-text); }
+
+/* ── メンバー設定 ── */
+.member-table input[type="number"] { width: 50px; text-align: center; border: 1px solid var(--border); border-radius: 4px; padding: 4px; font-size: 13px; }
+.member-table td.group-a { color: var(--a-color); font-weight: 700; }
+
+/* ── 休館日 ── */
+.holiday-input { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.holiday-input input { padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; }
+.holiday-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.holiday-tag { display: inline-flex; align-items: center; gap: 4px; background: var(--weekend); padding: 4px 10px; border-radius: 4px; font-size: 13px; }
+.holiday-tag button { background: none; border: none; cursor: pointer; font-size: 16px; color: var(--text-muted); line-height: 1; }
+
+/* ── 統計・警告 ── */
+.stats-table td.mismatch { color: var(--a-color); font-weight: 700; }
+.warning-box { margin-top: 16px; padding: 12px 16px; background: #FFF3E0; border-left: 3px solid var(--warning); border-radius: 4px; font-size: 13px; }
+.warning-box h3 { font-size: 14px; color: var(--warning); margin-bottom: 6px; }
+
+.generate-area { text-align: center; padding: 32px 0; }
+.generate-area p { margin-top: 12px; font-size: 13px; color: var(--text-muted); }
+
+.period-row { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+.period-row label { font-size: 14px; font-weight: 500; }
+.period-row input[type="date"] { padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; }
+
+.section-title { font-size: 16px; font-weight: 700; color: var(--primary); margin-bottom: 12px; }
+.section-desc { font-size: 13px; color: var(--text-muted); margin-bottom: 16px; }
+
+/* ── ルール一覧 ── */
+.rule-list { list-style: none; }
+.rule-list li { padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 14px; display: flex; gap: 10px; align-items: flex-start; }
+.rule-list li:last-child { border-bottom: none; }
+.rule-icon { flex-shrink: 0; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; }
+.rule-icon.hard { background: var(--ng); color: var(--ng-text); }
+.rule-icon.soft { background: var(--hope); color: var(--hope-text); }
+
+/* ── 希望休割当セル ── */
+td.hope-assigned { background: #FFF8E1 !important; }
+.hope-mark { color: #E65100; font-size: 11px; margin-left: 2px; vertical-align: super; cursor: help; }
+
+/* ── 交換提案 ── */
+.swap-panel { margin-top: 24px; padding: 16px; background: var(--swap-bg); border: 1px solid #90CAF9; border-radius: 8px; }
+.swap-panel h3 { font-size: 14px; color: var(--swap-border); margin-bottom: 12px; }
+.swap-option { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; margin-bottom: 6px; cursor: pointer; transition: all .15s; font-size: 13px; }
+.swap-option:hover { border-color: var(--primary); background: #F0F9FA; }
+.swap-arrow { color: var(--primary); font-weight: 700; }
+.swap-info { color: var(--text-muted); font-size: 12px; margin-left: auto; }
+
+/* ── 交換ポップアップ ── */
+#swap-popup {
+  display: none; position: fixed; z-index: 9999;
+  background: var(--surface); border: 1px solid #90CAF9;
+  border-radius: 10px; box-shadow: 0 6px 24px rgba(0,0,0,.18);
+  min-width: 280px; max-width: 400px; max-height: 70vh;
+  overflow-y: auto; padding: 14px;
+}
+#swap-popup .popup-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
+}
+#swap-popup .popup-title { font-size: 13px; font-weight: 700; color: var(--swap-border); }
+#swap-popup .popup-close {
+  background: none; border: none; cursor: pointer;
+  font-size: 18px; color: var(--text-muted); line-height: 1; padding: 0 2px;
+}
+#swap-popup .popup-close:hover { color: var(--text); }
+
+@media (max-width: 640px) {
+  .container { padding: 12px 8px; }
+  h1 { font-size: 16px; }
+  .tab { padding: 8px 10px; font-size: 12px; }
+  .btn-lg { padding: 12px 24px; font-size: 14px; }
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>シフト表 自動生成</h1>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+      <div style="display:flex;gap:4px;align-items:center;padding-right:8px;border-right:1px solid var(--border);">
+        <span style="font-size:11px;color:var(--text-muted);white-space:nowrap;">ブラウザ保存</span>
+        <button class="btn btn-outline btn-sm" onclick="saveToLocalStorage()" title="このブラウザに状態を保存">保存</button>
+        <button class="btn btn-outline btn-sm" onclick="loadFromLocalStorage()" title="ブラウザから状態を復元">復元</button>
+      </div>
+      <div style="display:flex;gap:4px;align-items:center;padding-right:8px;border-right:1px solid var(--border);">
+        <span style="font-size:11px;color:var(--text-muted);white-space:nowrap;">JSONファイル</span>
+        <button class="btn btn-outline btn-sm" onclick="exportJSON()" title="JSONファイルとして保存">保存</button>
+        <button class="btn btn-outline btn-sm" onclick="importJSON()" title="JSONファイルから復元">読込</button>
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="downloadExcel()">Excelダウンロード</button>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="shift">シフト表</button>
+    <button class="tab" data-tab="settings">基本設定</button>
+    <button class="tab" data-tab="members">メンバー設定</button>
+    <button class="tab" data-tab="ng">NG日・希望休</button>
+    <button class="tab" data-tab="pairng">NG組合せ</button>
+    <button class="tab" data-tab="rules">ルール一覧</button>
+    <button class="tab" data-tab="guide">使い方</button>
+  </div>
+
+  <!-- 交換候補フローティングポップアップ -->
+  <div id="swap-popup">
+    <div class="popup-header">
+      <span class="popup-title" id="swap-popup-title"></span>
+      <button class="popup-close" onclick="closeSwapPopup()">✕</button>
+    </div>
+    <div id="swap-popup-body"></div>
+  </div>
+
+  <!-- ── シフト表タブ ── -->
+  <div id="panel-shift" class="panel active">
+    <div class="generate-area">
+      <button class="btn btn-primary btn-lg" onclick="generate()">&#x1F3B2; シフト生成</button>
+      <p>ボタンを押すたびに、制約を守りながらランダムなシフトが生成されます</p>
+    </div>
+    <p id="swap-hint" class="section-desc" style="display:none;">名前をクリックすると交換候補が表示されます。</p>
+    <div id="shift-result"></div>
+    <div id="swap-panel-area"></div>
+    <div id="history-area"></div>
+    <div id="stats-result"></div>
+    <div id="warnings-result"></div>
+  </div>
+
+  <!-- ── 基本設定タブ ── -->
+  <div id="panel-settings" class="panel">
+    <h2 class="section-title">期間設定</h2>
+    <div class="period-row">
+      <label>開始日</label>
+      <input type="date" id="start-date" value="2025-05-31">
+      <label>終了日</label>
+      <input type="date" id="end-date" value="2025-06-27">
+      <button class="btn btn-primary" onclick="applyPeriod()">期間を反映</button>
+    </div>
+    <h2 class="section-title">その他休館日</h2>
+    <p class="section-desc">土日・祝日は自動判定されます。追加の休館日のみ入力してください。</p>
+    <div class="holiday-input">
+      <input type="date" id="holiday-date">
+      <input type="text" id="holiday-memo" placeholder="メモ（任意）" style="width:200px;">
+      <button class="btn btn-primary" onclick="addHoliday()">追加</button>
+    </div>
+    <div id="holiday-list" class="holiday-list"></div>
+  </div>
+
+  <!-- ── メンバー設定タブ ── -->
+  <div id="panel-members" class="panel">
+    <h2 class="section-title">メンバー設定</h2>
+    <p class="section-desc">各メンバーの平日・休日の回数を調整できます。</p>
+    <div id="member-table-wrap"></div>
+  </div>
+
+  <!-- ── NG日・希望休タブ ── -->
+  <div id="panel-ng" class="panel">
+    <h2 class="section-title">NG日・希望休 設定</h2>
+    <p class="section-desc">セルをクリックするたびに 空欄 → NG → 希望休 → 空欄 と切り替わります</p>
+    <div id="ng-table-wrap" class="ng-table-wrap"></div>
+  </div>
+
+  <!-- ── ルール一覧タブ ── -->
+  <!-- ── NG組合せタブ ── -->
+  <div id="panel-pairng" class="panel">
+    <h2 class="section-title">NG組合せ設定</h2>
+    <p class="section-desc">救急ローテのペアを登録します。登録した2人は<strong>月〜木・日曜の当直に同時に入れなくなります</strong>。日直・金曜当直・土曜当直は通常通り入れます。</p>
+    <div id="pairng-table-wrap"></div>
+    <div style="margin-top:16px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;">
+      <span style="font-size:14px;font-weight:500;">ペア追加：</span>
+      <select id="pairng-member1" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></select>
+      <span style="font-size:14px;font-weight:700;">と</span>
+      <select id="pairng-member2" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:14px;"></select>
+      <button class="btn btn-primary" onclick="addPairNG()">＋ 追加</button>
+    </div>
+  </div>
+
+  <!-- ── 使い方タブ ── -->
+  <div id="panel-guide" class="panel">
+    <h2 class="section-title">使い方ガイド</h2>
+
+    <div style="display:flex;flex-direction:column;gap:20px;">
+
+      <!-- シフト生成 -->
+      <div style="background:var(--surface);border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden;">
+        <div style="background:var(--primary);color:#fff;padding:10px 16px;font-size:14px;font-weight:700;">① シフト表を生成する</div>
+        <div style="padding:14px 16px;font-size:13px;line-height:1.9;">
+          <p>「シフト表」タブの <strong>「シフト生成」ボタン</strong> を押すと、全ルールを守ったシフトが自動で作られます。</p>
+          <ul style="margin:8px 0 0 16px;">
+            <li>ボタンを押すたびに<strong>ランダムに再生成</strong>されます（すでにシフトがある場合は確認ダイアログが表示されます）</li>
+            <li>生成後はシフト表・割当統計・警告が同じ画面に表示されます</li>
+            <li>⚠ マークがついた割当は「希望休だが割り当てられた」ことを示します</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- 基本設定 -->
+      <div style="background:var(--surface);border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden;">
+        <div style="background:var(--primary);color:#fff;padding:10px 16px;font-size:14px;font-weight:700;">② 基本設定（期間・休館日）</div>
+        <div style="padding:14px 16px;font-size:13px;line-height:1.9;">
+          <p><strong>期間設定：</strong>シフトを作りたい月の開始日〜終了日を入力し「期間を反映」ボタンを押してください。</p>
+          <p style="margin-top:6px;"><strong>休館日：</strong>土日・祝日は自動で休日扱いになります。それ以外の休館日（年末年始など）は日付とメモを入力して「追加」ボタンで登録してください。</p>
+          <ul style="margin:8px 0 0 16px;">
+            <li>登録した休館日は土日と同じ扱いになり、日直・当直の両方が割り当てられます</li>
+            <li>追加した休館日はタグ形式で一覧表示され、×ボタンで削除できます</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- メンバー設定 -->
+      <div style="background:var(--surface);border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden;">
+        <div style="background:var(--primary);color:#fff;padding:10px 16px;font-size:14px;font-weight:700;">③ メンバー設定</div>
+        <div style="padding:14px 16px;font-size:13px;line-height:1.9;">
+          <p><strong>年次：</strong>各メンバーの年次（1年目 / 2年目）を設定します。年次が異なるメンバー同士は同じ枠に入れず、手動交換の候補にも出ません。</p>
+          <p style="margin-top:6px;"><strong>平日回数 / 休日回数：</strong>そのメンバーが1ヶ月に担当する平日当直・休日勤務の回数です。生成時に必ずこの回数になるよう調整されます。</p>
+          <p style="margin-top:6px;"><strong>メンバーの追加：</strong>下部フォームで名前・年次を選び「＋ 追加」で登録できます。</p>
+          <p style="margin-top:6px;"><strong>メンバーの削除：</strong>各行の「削除」ボタンで削除できます。そのメンバーのNG日設定も同時に消去されます。</p>
+          <div style="margin-top:10px;padding:8px 12px;background:#FFF3E0;border-left:3px solid #E65100;border-radius:4px;">
+            ⚠ メンバーの追加・削除後は、シフトを再生成してください。
+          </div>
+        </div>
+      </div>
+
+      <!-- NG日・希望休 -->
+      <div style="background:var(--surface);border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden;">
+        <div style="background:var(--primary);color:#fff;padding:10px 16px;font-size:14px;font-weight:700;">④ NG日・希望休の設定</div>
+        <div style="padding:14px 16px;font-size:13px;line-height:1.9;">
+          <p>表の各セルをクリックするたびに <strong>空欄 → NG → 希望休 → 空欄</strong> と切り替わります。</p>
+          <div style="display:flex;gap:12px;margin-top:8px;flex-wrap:wrap;">
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span style="background:var(--ng);color:var(--ng-text);padding:2px 10px;border-radius:4px;font-size:12px;font-weight:700;">NG</span>
+              <span>絶対に入れない日（完全NG）</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;">
+              <span style="background:var(--hope);color:var(--hope-text);padding:2px 10px;border-radius:4px;font-size:12px;font-weight:700;">希望休</span>
+              <span>できれば外してほしい日（やむを得ない場合は入ることあり）</span>
+            </div>
+          </div>
+          <ul style="margin:10px 0 0 16px;">
+            <li>休日の行は「日直」と「当直」の2行あります。それぞれ別に設定できます</li>
+            <li>平日は「当直」のみです</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- NG組合せ -->
+      <div style="background:var(--surface);border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden;">
+        <div style="background:var(--primary);color:#fff;padding:10px 16px;font-size:14px;font-weight:700;">⑤ NG組合せの設定</div>
+        <div style="padding:14px 16px;font-size:13px;line-height:1.9;">
+          <p>救急ローテのペアを登録します。登録した2人は<strong>月〜木・日曜の当直</strong>に入れなくなります。</p>
+          <p style="margin-top:6px;">理由：救急ローテのペアは月〜木・日曜の夜は救急対応に入るため、通常の当直と重複できません。また当直明けは休むルールとの兼ね合いもあります。</p>
+          <div style="margin-top:8px;padding:8px 12px;background:#E3F2FD;border-radius:6px;font-size:12px;">
+            <strong>制限される枠：</strong>月・火・水・木・日の当直<br>
+            <strong>制限されない枠：</strong>日直（土・日）、金曜当直、土曜当直
+          </div>
+          <ul style="margin:10px 0 0 16px;">
+            <li>セレクトボックスで2人を選び「＋ 追加」で登録</li>
+            <li>シフト生成時・手動交換時の両方で自動的に制約として機能します</li>
+            <li>削除は各行の「削除」ボタンから</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- 手動交換 -->
+      <div style="background:var(--surface);border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden;">
+        <div style="background:var(--primary);color:#fff;padding:10px 16px;font-size:14px;font-weight:700;">⑥ シフト表で手動交換する</div>
+        <div style="padding:14px 16px;font-size:13px;line-height:1.9;">
+          <p>生成後のシフト表で<strong>名前をクリック</strong>すると、交換候補がポップアップで表示されます。</p>
+          <ul style="margin:8px 0 0 16px;">
+            <li>候補は同年次のメンバーのみ表示されます</li>
+            <li>全ルール（NG日・間隔・NG組合せなど）を守った候補だけが表示されます</li>
+            <li>中3日ルールを緩和した候補も常に表示されます。<span style="background:#FFF9C4;color:#F57F17;border-radius:3px;padding:1px 6px;font-size:11px;">⚠ 中2日(名前)</span> や <span style="background:#FFCDD2;color:#B71C1C;border-radius:3px;padding:1px 6px;font-size:11px;">⚠ 中1日(名前)</span> の警告が付きます。中1日はかなり順位が低くなります（実行するかは自分で判断してください）</li>
+            <li>「連鎖交換」は2ステップで交換する候補です</li>
+            <li>交換後は <strong>「↩ 元に戻す」ボタン</strong> で1回だけ取り消せます</li>
+            <li>ポップアップは✕ボタン・ポップアップ外クリックで閉じます</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- 保存・読み込み -->
+      <div style="background:var(--surface);border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden;">
+        <div style="background:var(--primary);color:#fff;padding:10px 16px;font-size:14px;font-weight:700;">⑦ 保存・読み込み</div>
+        <div style="padding:14px 16px;font-size:13px;line-height:1.9;">
+          <p>画面右上にある保存・読み込みボタンを使うと、作業内容を保存できます。</p>
+          <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px;">
+            <div style="padding:8px 12px;background:#E3F2FD;border-radius:6px;">
+              <strong>ブラウザ保存 / 復元：</strong>同じブラウザ・同じPCであれば次回開いたときに自動で復元されます。保存ボタンを押すと即座に記録されます。
+            </div>
+            <div style="padding:8px 12px;background:#F3E5F5;border-radius:6px;">
+              <strong>JSONファイル 保存 / 読込：</strong>シフト表・設定をJSONファイルとしてダウンロードします。別のPCで開いたり、月ごとにバックアップを取るのに使えます。読込時はファイルを選択するだけです。
+            </div>
+            <div style="padding:8px 12px;background:#E8F5E9;border-radius:6px;">
+              <strong>Excelダウンロード：</strong>シフト表をExcelファイルとして出力します（閲覧・印刷用）。
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div id="panel-rules" class="panel">
+    <h2 class="section-title">適用ルール一覧</h2>
+    <p class="section-desc">このシフト表に適用されている全ルールです。すべて自動的に守られます。</p>
+    <div style="background:var(--surface);border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden;">
+      <ul class="rule-list">
+        <li><span class="rule-icon hard">1</span><div><strong>平日は当直のみ</strong><br>平日には日直枠はなく、当直のみ（最大2名）が配置されます。</div></li>
+        <li><span class="rule-icon hard">2</span><div><strong>休日は日直＋当直</strong><br>土日・祝日・休館日には日直（2名）と当直（最大2名）が配置されます。</div></li>
+        <li><span class="rule-icon hard">3</span><div><strong>休日の日直は必ず2名</strong><br>休日の日直枠は必ず2名を確保します。</div></li>
+        <li><span class="rule-icon hard">4</span><div><strong>Aグループ2名の同枠禁止</strong><br>日直・当直いずれの枠でも、Aグループ（馬場・下田・実松・和田・堀井）から2名が入ることはありません。</div></li>
+        <li><span class="rule-icon hard">5</span><div><strong>当直後は中3日</strong><br>当直の翌日から3日間は次の勤務に入れません。（例: 月曜当直 → 金曜から可）</div></li>
+        <li><span class="rule-icon hard">6</span><div><strong>日直後は中2日</strong><br>日直の翌日から2日間は次の勤務に入れません。（例: 土曜日直 → 火曜から可）</div></li>
+        <li><span class="rule-icon hard">7</span><div><strong>同日の日直・当直兼任禁止</strong><br>同じ日に日直と当直の両方に入ることはできません。</div></li>
+        <li><span class="rule-icon hard">8</span><div><strong>NG日は絶対不可</strong><br>NGと設定された日には、いかなる場合もシフトを入れません。</div></li>
+        <li><span class="rule-icon hard">9</span><div><strong>金曜日はAグループ不可</strong><br>金曜日にはAグループのメンバーはシフトに入りません。</div></li>
+        <li><span class="rule-icon soft">10</span><div><strong>金曜日はBグループできれば1名まで</strong><br>金曜日の当直はBグループから1名以内を目指します。やむを得ない場合は2名になることがあります。</div></li>
+        <li><span class="rule-icon soft">11</span><div><strong>希望休はなるべく回避</strong><br>希望休と設定された日はなるべく避けますが、やむを得ない場合は入れることがあります。</div></li>
+        <li><span class="rule-icon hard">12</span><div><strong>設定した勤務回数は必ず守る</strong><br>メンバー設定タブで設定した平日・休日の回数は必ず守られます（超過・不足ともに発生しません）。</div></li>
+        <li><span class="rule-icon hard">13</span><div><strong>全スロット最低1名</strong><br>すべてのスロットに最低1名は配置されます（0名の日は発生しません）。</div></li>
+      </ul>
+    </div>
+    <div style="margin-top:16px;padding:10px 14px;background:var(--surface);border-radius:6px;font-size:12px;color:var(--text-muted);">
+      <span class="rule-icon hard" style="display:inline-flex;width:18px;height:18px;font-size:10px;vertical-align:middle;">●</span> = 絶対ルール（必ず守られる）&emsp;
+      <span class="rule-icon soft" style="display:inline-flex;width:18px;height:18px;font-size:10px;vertical-align:middle;">●</span> = ソフトルール（可能な限り守る）
+    </div>
+  </div>
+</div>
+
+<footer style="text-align:center;padding:24px 16px 28px;font-size:12px;color:var(--text-muted);letter-spacing:0.04em;">
+  Developed by <strong style="color:var(--primary);">Baba</strong> &amp; <strong style="color:var(--primary);">Hanioka</strong>
+</footer>
+
+<script>
+// ═══════════════════════════════════════
+// データモデル
+// ═══════════════════════════════════════
+const MEMBERS_A = ["馬場", "下田", "実松", "和田", "堀井"];
+const MEMBERS_B = ["唐鎌", "前田", "東", "仮元", "山口", "埴岡", "中村", "眞部", "島田"];
+
+let state = {
+  startDate: new Date(2025, 4, 31),
+  endDate: new Date(2025, 5, 27),
+  extraHolidays: [],
+  members: [],
+  ngDays: {},
+  schedule: null,
+  stats: null,
+  warnings: [],
+  swapSelection: null, // {iso, dutyType, slotIdx, name}
+  previousSchedule: null, // 交換前のスナップショット（戻るボタン用）
+  pairNG: [], // [{name1, name2}] 救急ローテペア（月〜木・日曜の当直不可）
+  lastSwap: [], // [{iso, dutyType, name}] 直前の交換セル（ハイライト用）
+  swapHistory: [], // [{label, schedule, stats, warnings, lastSwap}] 交換履歴
+};
+
+// year から group を導出（2年目以上 → "A"、1年目 → "B"）
+function yearToGroup(year) { return year >= 2 ? "A" : "B"; }
+
+function initMembers() {
+  state.members = [];
+  MEMBERS_A.forEach(n => state.members.push({ name: n, year: 2, weekdayTarget: 2, holidayTarget: 2 }));
+  MEMBERS_B.forEach(n => state.members.push({ name: n, year: 1, weekdayTarget: 2, holidayTarget: 2 }));
+}
+initMembers();
+
+// ═══════════════════════════════════════
+// 祝日（2025-2027）
+// ═══════════════════════════════════════
+const JP_HOLIDAYS = new Set([
+  "2025-01-01","2025-01-13","2025-02-11","2025-02-23","2025-02-24",
+  "2025-03-20","2025-04-29","2025-05-03","2025-05-04","2025-05-05","2025-05-06",
+  "2025-07-21","2025-08-11","2025-09-15","2025-09-23",
+  "2025-10-13","2025-11-03","2025-11-23","2025-11-24",
+  "2026-01-01","2026-01-12","2026-02-11","2026-02-23",
+  "2026-03-20","2026-04-29","2026-05-03","2026-05-04","2026-05-05","2026-05-06",
+  "2026-07-20","2026-08-11","2026-09-21","2026-09-22","2026-09-23",
+  "2026-10-12","2026-11-03","2026-11-23",
+  "2027-01-01","2027-01-11","2027-02-11","2027-02-23",
+  "2027-03-21","2027-04-29","2027-05-03","2027-05-04","2027-05-05",
+  "2027-07-19","2027-08-11","2027-09-20","2027-09-23",
+  "2027-10-11","2027-11-03","2027-11-23",
+]);
+
+function isHoliday(date) {
+  const dow = date.getDay();
+  if (dow === 0 || dow === 6) return true;
+  if (JP_HOLIDAYS.has(fmtISO(date))) return true;
+  for (const h of state.extraHolidays) {
+    if (fmtISO(h.date) === fmtISO(date)) return true;
+  }
+  return false;
+}
+
+function isFriday(date) { return date.getDay() === 5; }
+
+// ═══════════════════════════════════════
+// ユーティリティ
+// ═══════════════════════════════════════
+function fmtISO(d) {
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+}
+function fmtJP(d) { return (d.getMonth()+1) + "/" + d.getDate(); }
+const DAY_JP = ["日","月","火","水","木","金","土"];
+function dayName(d) { return DAY_JP[d.getDay()]; }
+
+function getDates() {
+  const dates = [];
+  let d = new Date(state.startDate);
+  while (d <= state.endDate) { dates.push(new Date(d)); d.setDate(d.getDate() + 1); }
+  return dates;
+}
+
+// dutyType付きキー: 休日は日直・当直別, 平日はnight_duty固定
+function ngKey(name, date, dutyType) {
+  const base = name + "_" + fmtISO(date);
+  return dutyType ? base + "_" + dutyType : base;
+}
+function diffDays(a, b) { return Math.round((a - b) / 86400000); }
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+// ═══════════════════════════════════════
+// シフト生成（完全ランダム + 制約遵守）
+// ═══════════════════════════════════════
+
+// NG組合せ: 月〜木・日曜の当直に、ペアの相手と同時に入るかチェック
+function isPairNGConflict(name, iso, dutyType, existingSlotMembers) {
+  if (dutyType !== "night_duty") return false;
+  const dow = new Date(iso + "T00:00:00").getDay();
+  if (!(dow === 0 || (dow >= 1 && dow <= 4))) return false; // 日・月〜木のみ
+  return state.pairNG.some(p =>
+    (p.name1 === name && existingSlotMembers.includes(p.name2)) ||
+    (p.name2 === name && existingSlotMembers.includes(p.name1))
+  );
+}
+
+function canAssign(name, date, dutyType, isHol, memberGroup, memberDuties,
+                   assignedDates, weekdayAssigned, holidayAssigned, currentAssigned, members) {
+  const iso = fmtISO(date);
+  // dutyType別キーを優先、なければ旧形式キー（後方互換用）で確認
+  const ngValCheck = state.ngDays[ngKey(name, date, dutyType)] ?? state.ngDays[ngKey(name, date)];
+  if (ngValCheck === "NG") return false;
+  if (assignedDates[name].has(iso)) return false;
+
+  const m = members.find(x => x.name === name);
+  if (isHol) { if (holidayAssigned[name] >= m.holidayTarget) return false; }
+  else { if (weekdayAssigned[name] >= m.weekdayTarget) return false; }
+
+  // 間隔チェック
+  const catNow = dutyType === "night_duty" ? "night" : "day";
+  for (const prev of memberDuties[name]) {
+    const gap = Math.abs(diffDays(date, prev.date)) - 1;
+    if (date > prev.date) { if (gap < (prev.type === "night" ? 3 : 2)) return false; }
+    else if (date < prev.date) { if (gap < (catNow === "night" ? 3 : 2)) return false; }
+  }
+
+  // Aグループ同枠制約
+  if (memberGroup[name] === "A") {
+    const slotMembers = currentAssigned[iso + "_" + dutyType] || [];
+    if (slotMembers.some(n => memberGroup[n] === "A")) return false;
+  }
+
+  // 金曜ルール: Aグループ不可
+  if (isFriday(date) && !isHol && memberGroup[name] === "A") return false;
+
+  // 金曜ルール: Bグループは既に2名いれば追加不可（2名が上限）
+  if (isFriday(date) && !isHol && memberGroup[name] === "B") {
+    const slotMembers = currentAssigned[iso + "_" + dutyType] || [];
+    const bCount = slotMembers.filter(n => memberGroup[n] === "B").length;
+    if (bCount >= 2) return false;
+  }
+
+  // NG組合せ: 月〜木・日曜の当直でペアの相手と同枠禁止
+  const slotMembersNow2 = currentAssigned[iso + "_" + dutyType] || [];
+  if (isPairNGConflict(name, iso, dutyType, slotMembersNow2)) return false;
+
+  return true;
+}
+
+function doAssign(name, date, dutyType, iso, isHol, schedule, currentAssigned,
+                  assignedDates, memberDuties, weekdayAssigned, holidayAssigned, warnings) {
+  schedule[iso][dutyType].push(name);
+  const key = iso + "_" + dutyType;
+  if (!currentAssigned[key]) currentAssigned[key] = [];
+  currentAssigned[key].push(name);
+  assignedDates[name].add(iso);
+  memberDuties[name].push({ date: new Date(date), type: dutyType === "night_duty" ? "night" : "day" });
+  if (isHol) holidayAssigned[name]++;
+  else weekdayAssigned[name]++;
+
+  const ngValWarn = state.ngDays[ngKey(name, date, dutyType)] ?? state.ngDays[ngKey(name, date)];
+  if (ngValWarn === "希望休") {
+    const jp = dutyType === "night_duty" ? "当直" : "日直";
+    warnings.push(`${name}: ${fmtJP(date)} (${jp}) - 希望休だが割当`);
+  }
+}
+
+function generate() {
+  if (state.schedule && !confirm("シフトを再生成します。現在のシフトは上書きされますがよろしいですか？")) return;
+  const dates = getDates();
+  const members = state.members;
+  const memberGroup = {};
+  members.forEach(m => memberGroup[m.name] = yearToGroup(m.year));
+
+  let bestSchedule = null, bestScore = -Infinity, bestStats = null, bestWarnings = [];
+  const MAX = 1000;
+
+  for (let attempt = 0; attempt < MAX; attempt++) {
+    const schedule = {};
+    dates.forEach(d => { schedule[fmtISO(d)] = { day_duty: [], night_duty: [] }; });
+
+    const wa = {}, ha = {}, md = {}, ad = {};
+    members.forEach(m => { wa[m.name]=0; ha[m.name]=0; md[m.name]=[]; ad[m.name]=new Set(); });
+    const warnings = [];
+    const allSlots = [];
+    dates.forEach(dt => {
+      if (isHoliday(dt)) { allSlots.push({date:dt,type:"day_duty"}); allSlots.push({date:dt,type:"night_duty"}); }
+      else { allSlots.push({date:dt,type:"night_duty"}); }
+    });
+
+    const ca = {};
+
+    // 候補を「希望休でない人」と「希望休の人」に分け、前者を優先するヘルパー
+    function preferNonHope(cands, date, dutyType) {
+      const nonHope = cands.filter(m => {
+        const v = state.ngDays[ngKey(m.name, date, dutyType)] ?? state.ngDays[ngKey(m.name, date)];
+        return v !== "希望休";
+      });
+      // 希望休でない候補がいればそちらから、いなければ全候補から
+      return nonHope.length > 0 ? nonHope : cands;
+    }
+
+    // Phase 1: 各スロット1名（希望休でない人を優先）
+    for (const slot of shuffle([...allSlots])) {
+      const iso = fmtISO(slot.date);
+      const k = iso+"_"+slot.type;
+      if (!ca[k]) ca[k] = [];
+      if (ca[k].length >= 1) continue;
+      const isHol = isHoliday(slot.date);
+      const allCands = members.filter(m => canAssign(m.name,slot.date,slot.type,isHol,memberGroup,md,ad,wa,ha,ca,members));
+      if (!allCands.length) continue;
+      const cands = preferNonHope(allCands, slot.date, slot.type);
+      doAssign(cands[Math.floor(Math.random()*cands.length)].name,slot.date,slot.type,iso,isHol,schedule,ca,ad,md,wa,ha,warnings);
+    }
+
+    // Phase 2: 2名目（休日日直は強制2名、希望休でない人を優先）
+    for (const slot of shuffle([...allSlots])) {
+      const iso = fmtISO(slot.date);
+      const k = iso+"_"+slot.type;
+      if (!ca[k]) ca[k] = [];
+      if (ca[k].length >= 2) continue;
+      const isHol = isHoliday(slot.date);
+      const allCands = members.filter(m => canAssign(m.name,slot.date,slot.type,isHol,memberGroup,md,ad,wa,ha,ca,members));
+      if (!allCands.length) continue;
+      // 希望休でない人を常に優先（必須スロットでも）
+      const cands = preferNonHope(allCands, slot.date, slot.type);
+      doAssign(cands[Math.floor(Math.random()*cands.length)].name,slot.date,slot.type,iso,isHol,schedule,ca,ad,md,wa,ha,warnings);
+    }
+
+    // スコア
+    let score = 0, zeroSlots = 0;
+    dates.forEach(dt => {
+      const iso = fmtISO(dt);
+      const s = schedule[iso];
+      if (isHoliday(dt)) {
+        if (s.day_duty.length === 0) { zeroSlots++; score -= 500; }
+        if (s.night_duty.length === 0) { zeroSlots++; score -= 500; }
+        // 休日日直2名必須: 1名だと大ペナルティ
+        if (s.day_duty.length < 2) score -= 800;
+        score -= (2 - s.night_duty.length) * 100;
+      } else {
+        if (s.night_duty.length === 0) { zeroSlots++; score -= 500; }
+        score -= (2 - s.night_duty.length) * 100;
+      }
+    });
+
+    members.forEach(m => {
+      // 勤務回数は必ず守る→超過・不足どちらも大ペナルティ
+      score -= Math.abs(wa[m.name] - m.weekdayTarget) * 2000;
+      score -= Math.abs(ha[m.name] - m.holidayTarget) * 2000;
+      // 金曜B2名はソフト制約：できれば1名（1名超過につきペナルティ）
+      // ※canAssignで既に2名以下は保証済み。2名になった場合にペナルティ
+    });
+    dates.forEach(dt => {
+      if (isFriday(dt) && !isHoliday(dt)) {
+        const iso = fmtISO(dt);
+        const s = schedule[iso];
+        const memberGroup2 = {};
+        members.forEach(m => memberGroup2[m.name] = yearToGroup(m.year));
+        const bNight = s.night_duty.filter(n => memberGroup2[n] === "B").length;
+        if (bNight >= 2) score -= 300; // 2名になったらペナルティ
+      }
+    });
+    // 希望休割当は大ペナルティ（人数を最小化するため）
+    score -= warnings.length * 200;
+
+    const stats = {};
+    members.forEach(m => {
+      stats[m.name] = { weekday:wa[m.name], holiday:ha[m.name], total:wa[m.name]+ha[m.name], weekdayTarget:m.weekdayTarget, holidayTarget:m.holidayTarget };
+    });
+
+    if (score > bestScore) { bestScore=score; bestSchedule=JSON.parse(JSON.stringify(schedule)); bestStats=stats; bestWarnings=[...warnings]; }
+
+    const targetsMet = members.every(m => wa[m.name]===m.weekdayTarget && ha[m.name]===m.holidayTarget);
+    // 休日日直2名チェック
+    const dayDuty2 = dates.every(dt => !isHoliday(dt) || schedule[fmtISO(dt)].day_duty.length >= 2);
+    // 金曜B1名チェック（ソフト）
+    const memberGroup2 = {}; members.forEach(m => memberGroup2[m.name] = yearToGroup(m.year));
+    const fridayB1 = dates.every(dt => {
+      if (!isFriday(dt) || isHoliday(dt)) return true;
+      const iso = fmtISO(dt);
+      return (schedule[iso].night_duty.filter(n => memberGroup2[n] === "B").length <= 1);
+    });
+    if (zeroSlots===0 && targetsMet && warnings.length===0 && dayDuty2) break;
+  }
+
+  state.schedule = bestSchedule;
+  state.stats = bestStats;
+  state.warnings = bestWarnings;
+  state.swapSelection = null;
+  state.previousSchedule = null;
+  state.lastSwap = [];
+  state.swapHistory = [];
+  renderShift();
+  renderHistory();
+}
+
+// ═══════════════════════════════════════
+// 交換提案
+// ═══════════════════════════════════════
+
+function selectForSwap(event, iso, dutyType, slotIdx, name) {
+  if (!name) return;
+  state.swapSelection = { iso, dutyType, slotIdx, name, clickX: event.clientX, clickY: event.clientY };
+  renderShift();
+  renderSwapOptions();
+}
+
+function closeSwapPopup() {
+  document.getElementById("swap-popup").style.display = "none";
+  state.swapSelection = null;
+  renderShift();
+}
+
+// ─────────────────────────────────────────────
+// 曜日の同等性判定
+// 平日当直: 月(１)火(２)水(３)木(４)は互いに同等
+// 休日日直: 土(６)日(０)休館日は互いに同等
+// 休日当直: 同曜日のみ
+// ─────────────────────────────────────────────
+function dowCompatible(dow1, isHol1, dow2, isHol2, dutyType) {
+  if (dutyType === "day_duty") {
+    // 日直は休日同士。休館日も含む土日扱い
+    return (isHol1 && isHol2);
+  } else {
+    // 当直: 平日同士は月火水木を同等扱い
+    const WEEKDAY = new Set([1,2,3,4]);
+    if (!isHol1 && !isHol2) return WEEKDAY.has(dow1) && WEEKDAY.has(dow2);
+    if (isHol1 && isHol2) return true; // 休日当直同士は同等
+    return false;
+  }
+}
+
+// 交換候補1件のスコア (高いほど良い)
+// 希望休への移動フラグも返す
+function swapOptionScore(sel, iso2, idx2, name2, tempSchedule) {
+  const date1 = new Date(sel.iso + "T00:00:00");
+  const date2 = new Date(iso2 + "T00:00:00");
+  const hol1 = isHoliday(date1);
+  const hol2 = isHoliday(date2);
+  const dow1 = date1.getDay();
+  const dow2 = date2.getDay();
+
+  let score = 0;
+
+  // 曜日一致度
+  if (dow1 === dow2 && hol1 === hol2) {
+    score += 100; // 完全一致
+  } else if (dowCompatible(dow1, hol1, dow2, hol2, sel.dutyType)) {
+    score += 60;  // 拡張同等曜日
+  } else {
+    score += 0;   // その他
+  }
+
+  // 希望休への移動ペナルティ
+  let hopeWarning = false;
+  const mg = {}; state.members.forEach(m => mg[m.name] = yearToGroup(m.year));
+  const ngVal1 = state.ngDays[ngKey(name2, date1, sel.dutyType)] ?? state.ngDays[ngKey(name2, date1)];
+  const ngVal2 = state.ngDays[ngKey(sel.name, date2, sel.dutyType)] ?? state.ngDays[ngKey(sel.name, date2)];
+  if (ngVal1 === "希望休" || ngVal2 === "希望休") { score -= 30; hopeWarning = true; }
+
+  return { score, hopeWarning };
+}
+
+function renderSwapOptions() {
+  const sel = state.swapSelection;
+  if (!sel || !sel.name) { document.getElementById("swap-panel-area").innerHTML = ""; return; }
+
+  const srcDate = new Date(sel.iso + "T00:00:00");
+  const dates = getDates();
+  const dutyJP = sel.dutyType === "night_duty" ? "当直" : "日直";
+
+  // スケジュールのスナップショット（複数交換用）
+  const baseSchedule = JSON.parse(JSON.stringify(state.schedule));
+
+  const candidates = []; // { steps:[], score, hopeWarning }
+
+  // ─── 1件1件交換の候補を収集 ───
+  dates.forEach(dt => {
+    const iso2 = fmtISO(dt);
+    if (iso2 === sel.iso) return;
+    const hol1 = isHoliday(srcDate);
+    const hol2 = isHoliday(dt);
+    // 同曜日扱いを満たすか確認
+    if (!dowCompatible(srcDate.getDay(), hol1, dt.getDay(), hol2, sel.dutyType) &&
+        srcDate.getDay() !== dt.getDay()) return;
+    // 日直は休日同士のみ
+    if (sel.dutyType === "day_duty" && !(hol1 && hol2)) return;
+
+    const s2 = state.schedule[iso2];
+    if (!s2) return;
+    const list = s2[sel.dutyType];
+    list.forEach((otherName, otherIdx) => {
+      if (otherName === sel.name) return;
+      const ok = checkSwapValid(sel.iso, sel.dutyType, sel.slotIdx, sel.name,
+                                iso2, sel.dutyType, otherIdx, otherName, baseSchedule);
+      if (ok) {
+        const { score, hopeWarning } = swapOptionScore(sel, iso2, otherIdx, otherName, baseSchedule);
+        candidates.push({
+          steps: [{ iso1: sel.iso, type1: sel.dutyType, idx1: sel.slotIdx, name1: sel.name,
+                    iso2, type2: sel.dutyType, idx2: otherIdx, name2: otherName }],
+          score: score + 100, // 1件ボーナス
+          hopeWarning,
+          label: `<strong>${sel.name}</strong> <span class="swap-arrow">⇄</span> <strong>${otherName}</strong> <span class="swap-info">${fmtJP(dt)} ${dayName(dt)} ${dutyJP}</span>`,
+        });
+      }
+    });
+  });
+
+  // ─── 2件連鎖交換の候補を収集 ───
+  // 考え方: sel.name を iso_mid の 中継者(midName) と交換した上で、
+  //          midName を また別の日程(iso_end)の endName と交換する
+  // 2件目の交換後、sel.nameの日程が望ましい日に移動できればOK
+  const MAX_CHAIN = 30; // 負荷のため連鎖候補数に上限を設ける
+  dates.forEach(dtMid => {
+    const isoMid = fmtISO(dtMid);
+    if (isoMid === sel.iso) return;
+    const sMid = state.schedule[isoMid];
+    if (!sMid) return;
+    const holMid = isHoliday(dtMid);
+
+    sMid[sel.dutyType].forEach((midName, midIdx) => {
+      if (midName === sel.name) return;
+      // sel.name ↔ midName (iso_sel ↔ isoMid)
+      const ok1 = checkSwapValid(sel.iso, sel.dutyType, sel.slotIdx, sel.name,
+                                 isoMid, sel.dutyType, midIdx, midName, baseSchedule);
+      if (!ok1) return;
+
+      // 中間交換後の代理スケジュール
+      const sch1 = JSON.parse(JSON.stringify(baseSchedule));
+      sch1[sel.iso][sel.dutyType][sel.slotIdx] = midName;
+      sch1[isoMid][sel.dutyType][midIdx] = sel.name;
+
+      // この時点で sel.name は isoMid にいる
+      // 次に midName の新しい位置 (sel.iso) を望ましい日に移動させたい
+      // 即ち midName (sel.isoにいる) ↔ endName (iso_end)
+      if (candidates.filter(c => c.steps.length >= 2).length >= MAX_CHAIN) return;
+
+      dates.forEach(dtEnd => {
+        const isoEnd = fmtISO(dtEnd);
+        if (isoEnd === sel.iso || isoEnd === isoMid) return;
+        const holEnd = isHoliday(dtEnd);
+        const holSrc = isHoliday(srcDate);
+        // 最終違動先の曜日が元と同等扶いか確認
+        if (!dowCompatible(srcDate.getDay(), holSrc, dtEnd.getDay(), holEnd, sel.dutyType) &&
+            srcDate.getDay() !== dtEnd.getDay()) return;
+        if (sel.dutyType === "day_duty" && !(holSrc && holEnd)) return;
+
+        const sEnd = sch1[isoEnd];
+        if (!sEnd) return;
+        sEnd[sel.dutyType].forEach((endName, endIdx) => {
+          if (endName === sel.name || endName === midName) return;
+          // midName (sel.isoに移動後) ↔ endName
+          // sel.isoにいるmidNameのidxを探す
+          const newMidIdx = sch1[sel.iso][sel.dutyType].indexOf(midName);
+          if (newMidIdx < 0) return;
+          const ok2 = checkSwapValid(sel.iso, sel.dutyType, newMidIdx, midName,
+                                    isoEnd, sel.dutyType, endIdx, endName, sch1);
+          if (!ok2) return;
+
+          let hopeW = false;
+          const ng1 = state.ngDays[ngKey(midName, srcDate, sel.dutyType)] ?? state.ngDays[ngKey(midName, srcDate)];
+          const ng2 = state.ngDays[ngKey(sel.name, dtMid, sel.dutyType)] ?? state.ngDays[ngKey(sel.name, dtMid)];
+          const ng3 = state.ngDays[ngKey(endName, srcDate, sel.dutyType)] ?? state.ngDays[ngKey(endName, srcDate)];
+          const ng4 = state.ngDays[ngKey(midName, dtEnd, sel.dutyType)] ?? state.ngDays[ngKey(midName, dtEnd)];
+          if (ng1==='希望休'||ng2==='希望休'||ng3==='希望休'||ng4==='希望休') hopeW = true;
+
+          let sc = 50; // 2件はカラー
+          // 最終到達先が元と完全同曜日ならボーナス
+          if (srcDate.getDay() === dtEnd.getDay() && isHoliday(srcDate) === holEnd) sc += 30;
+          else if (dowCompatible(srcDate.getDay(), isHoliday(srcDate), dtEnd.getDay(), holEnd, sel.dutyType)) sc += 15;
+          if (hopeW) sc -= 30;
+
+          candidates.push({
+            steps: [
+              { iso1: sel.iso, type1: sel.dutyType, idx1: sel.slotIdx, name1: sel.name,
+                iso2: isoMid, type2: sel.dutyType, idx2: midIdx, name2: midName },
+              { iso1: sel.iso, type1: sel.dutyType, idx1: newMidIdx, name1: midName,
+                iso2: isoEnd, type2: sel.dutyType, idx2: endIdx, name2: endName }
+            ],
+            score: sc,
+            hopeWarning: hopeW,
+            label: [
+              `<strong>${sel.name}</strong> <span class="swap-arrow">⇄</span> <strong>${midName}</strong> <span class="swap-info">${fmtJP(dtMid)} ${dayName(dtMid)} ${dutyJP}</span>`,
+              `<strong>${midName}</strong> <span class="swap-arrow">⇄</span> <strong>${endName}</strong> <span class="swap-info">${fmtJP(dtEnd)} ${dayName(dtEnd)} → ${sel.name}の日程が ${fmtJP(dtEnd)} ${dayName(dtEnd)}に</span>`,
+            ]
+          });
+        });
+      });
+    });
+  });
+
+  // ─── 緩和候補: 間隔ルールのみ違反（中2日・中1日）の候補を常に追加 ───
+  // 既に正常候補として収集済みのペアはスキップ
+  const normalFingerprints = new Set(
+    candidates.filter(c => c.steps.length === 1)
+              .map(c => `${c.steps[0].iso2}|${c.steps[0].name2}`)
+  );
+  dates.forEach(dt => {
+    const iso2 = fmtISO(dt);
+    if (iso2 === sel.iso) return;
+    const hol1 = isHoliday(srcDate), hol2 = isHoliday(dt);
+    if (!dowCompatible(srcDate.getDay(), hol1, dt.getDay(), hol2, sel.dutyType) &&
+        srcDate.getDay() !== dt.getDay()) return;
+    if (sel.dutyType === "day_duty" && !(hol1 && hol2)) return;
+    const s2 = state.schedule[iso2]; if (!s2) return;
+    s2[sel.dutyType].forEach((otherName, otherIdx) => {
+      if (otherName === sel.name) return;
+      if (normalFingerprints.has(`${iso2}|${otherName}`)) return; // 正常候補に既にある
+      if (!checkSwapValidSkipInterval(sel.iso, sel.dutyType, sel.slotIdx, sel.name,
+                                      iso2, sel.dutyType, otherIdx, otherName, baseSchedule)) return;
+      // 交換後の間隔違反を計算
+      const v1 = calcIntervalViolation(sel.name, sel.iso, iso2, sel.dutyType, baseSchedule);
+      const v2 = calcIntervalViolation(otherName, iso2, sel.iso, sel.dutyType, baseSchedule);
+      if (v1 && v1.minGap < 1) return; // 連日（中0日）は不可
+      if (v2 && v2.minGap < 1) return;
+      if (!v1 && !v2) return; // 間隔違反なし（正常候補のはず）
+      const violations = [];
+      if (v1) violations.push({ name: sel.name,  minGap: v1.minGap, reqGap: v1.reqGap });
+      if (v2) violations.push({ name: otherName, minGap: v2.minGap, reqGap: v2.reqGap });
+      const { score: baseScore, hopeWarning } = swapOptionScore(sel, iso2, otherIdx, otherName, baseSchedule);
+      // スコアペナルティ: 中1日は重いペナルティ、違反数が多いほど下がる
+      let penalty = 0;
+      violations.forEach(v => { penalty += v.minGap === 1 ? 500 : 150; });
+      candidates.push({
+        steps: [{ iso1: sel.iso, type1: sel.dutyType, idx1: sel.slotIdx, name1: sel.name,
+                  iso2, type2: sel.dutyType, idx2: otherIdx, name2: otherName }],
+        score: baseScore + 100 - penalty,
+        hopeWarning,
+        intervalViolations: violations,
+        label: `<strong>${sel.name}</strong> <span class="swap-arrow">⇄</span> <strong>${otherName}</strong> <span class="swap-info">${fmtJP(dt)} ${dayName(dt)} ${dutyJP}</span>`,
+      });
+    });
+  });
+
+  // ─── ソート＋重複除去 ───
+  candidates.sort((a,b) => b.score - a.score);
+  // 同一内容の重複が出ることがあるので簡易順位で上位10件まで
+  const shown = candidates.slice(0, 10);
+
+  const titleLine = `${sel.name} (${fmtJP(srcDate)} ${dayName(srcDate)} ${dutyJP}) の交換候補`;
+  let html = ``;
+
+  if (shown.length === 0) {
+    html += '<p style="font-size:13px;color:var(--text-muted);">交換可能な候補が見つかりませんでした。</p>';
+  } else {
+    shown.forEach((cand, rank) => {
+      const rankLabel = rank + 1;
+      const multiTag = cand.steps.length >= 2
+        ? '<span style="font-size:10px;background:#FFE0B2;color:#E65100;border-radius:3px;padding:1px 5px;margin-left:4px;">連鎖交換</span>' : '';
+      const hopeTag = cand.hopeWarning
+        ? '<span style="font-size:10px;background:#FFCDD2;color:#B71C1C;border-radius:3px;padding:1px 5px;margin-left:4px;">希望休あり</span>' : '';
+      let intervalTag = '';
+      if (cand.intervalViolations && cand.intervalViolations.length > 0) {
+        cand.intervalViolations.forEach(v => {
+          const lbl = v.minGap === 1 ? '⚠ 中1日' : `⚠ 中${v.minGap}日`;
+          const bg  = v.minGap === 1 ? '#FFCDD2' : '#FFF9C4';
+          const col = v.minGap === 1 ? '#B71C1C' : '#F57F17';
+          intervalTag += `<span style="font-size:10px;background:${bg};color:${col};border-radius:3px;padding:1px 5px;margin-left:4px;">${lbl}(${v.name})</span>`;
+        });
+      }
+
+      if (cand.steps.length === 1) {
+        const step = cand.steps[0];
+        html += `<div class="swap-option" onclick="executeSwap('${step.iso1}','${step.type1}',${step.idx1},'${step.name1}','${step.iso2}','${step.type2}',${step.idx2},'${step.name2}')">`;
+        html += `<span style="min-width:22px;font-size:12px;font-weight:700;color:var(--text-muted);">${rankLabel}.</span>`;
+        html += cand.label + multiTag + hopeTag + intervalTag;
+        html += `</div>`;
+      } else {
+        // 連鎖交換: data-steps属性にステップを格納
+        const stepsEncoded = encodeURIComponent(JSON.stringify(cand.steps));
+        html += `<div class="swap-option swap-multi" data-steps="${stepsEncoded}" data-multi="1">`;
+        html += `<div style="display:flex;align-items:center;gap:4px;margin-bottom:4px;">`;
+        html += `<span style="min-width:22px;font-size:12px;font-weight:700;color:var(--text-muted);">${rankLabel}.</span>`;
+        html += `<span style="font-size:12px;font-weight:600;">連鎖交換</span>${multiTag}${hopeTag}</div>`;
+        cand.steps.forEach((step, si) => {
+          html += `<div style="font-size:12px;padding-left:24px;margin-bottom:2px;">`;
+          const d1 = new Date(step.iso1+"T00:00:00"), d2 = new Date(step.iso2+"T00:00:00");
+          html += `▶ ${step.name1} <span class="swap-arrow">⇄</span> ${step.name2}&nbsp;<span class="swap-info">(${fmtJP(d1)} ↔ ${fmtJP(d2)} ${dayName(d2)})</span>`;
+          html += `</div>`;
+        });
+        html += `</div>`;
+      }
+    });
+  }
+
+  // ポップアップに表示
+  const popup = document.getElementById("swap-popup");
+  document.getElementById("swap-popup-title").textContent = titleLine;
+  document.getElementById("swap-popup-body").innerHTML = html;
+  popup.style.display = "block";
+
+  // 位置を調整（クリック位置の右下、はみ出す場合は左/上に反転）
+  const margin = 8;
+  const { clickX: cx, clickY: cy } = sel;
+  popup.style.left = (cx + margin) + "px";
+  popup.style.top  = (cy + margin) + "px";
+  requestAnimationFrame(() => {
+    const r = popup.getBoundingClientRect();
+    if (r.right  > window.innerWidth  - margin) popup.style.left = (cx - r.width  - margin) + "px";
+    if (r.bottom > window.innerHeight - margin) popup.style.top  = (cy - r.height - margin) + "px";
+  });
+
+  // 連鎖交換ボタンのイベント（属性経由で安全に渡す）
+  popup.querySelectorAll('[data-multi="1"]').forEach(el => {
+    el.addEventListener('click', () => {
+      const steps = JSON.parse(decodeURIComponent(el.dataset.steps));
+      executeMultiSwap(steps);
+    });
+  });
+}
+
+// tempSchedule: 連鎖交換用に中間スケジュールを渡せる（省略時はstate.schedule使用）
+function checkSwapValid(iso1, type1, idx1, name1, iso2, type2, idx2, name2, tempSchedule) {
+  const sch = tempSchedule || state.schedule;
+  const date1 = new Date(iso1 + "T00:00:00");
+  const date2 = new Date(iso2 + "T00:00:00");
+
+  // NG日チェック（dutyType別キー→旧形式キーの順）
+  const ng2to1 = state.ngDays[ngKey(name2,date1,type1)] ?? state.ngDays[ngKey(name2,date1)];
+  const ng1to2 = state.ngDays[ngKey(name1,date2,type2)] ?? state.ngDays[ngKey(name1,date2)];
+  if (ng2to1 === "NG") return false;
+  if (ng1to2 === "NG") return false;
+
+  // 同日に既に相手がいないかチェック
+  const s1 = sch[iso1];
+  const s2 = sch[iso2];
+  if (!s1 || !s2) return false;
+  const otherType = type1 === "night_duty" ? "day_duty" : "night_duty";
+  if (s1[otherType] && s1[otherType].includes(name2)) return false;
+  if (s2[otherType] && s2[otherType].includes(name1)) return false;
+
+  // 金曜・同枠ルール（年次ベース: 2年目以上 → 旧Aグループ相当）
+  const memberGroup = {};
+  state.members.forEach(m => memberGroup[m.name] = yearToGroup(m.year));
+  if (isFriday(date1) && !isHoliday(date1) && memberGroup[name2] === "A") return false;
+  if (isFriday(date2) && !isHoliday(date2) && memberGroup[name1] === "A") return false;
+
+  // 金曜1年目 2名以上は不可（ソフト尊重）
+  if (isFriday(date1) && !isHoliday(date1) && memberGroup[name2] === "B") {
+    const others = s1[type1].filter((n,i) => i !== idx1 && n !== name1);
+    if (others.filter(n => memberGroup[n] === "B").length >= 2) return false;
+  }
+  if (isFriday(date2) && !isHoliday(date2) && memberGroup[name1] === "B") {
+    const others = s2[type2].filter((n,i) => i !== idx2 && n !== name2);
+    if (others.filter(n => memberGroup[n] === "B").length >= 2) return false;
+  }
+
+  // 2年目同枠禁止: 交換後に同じ枠に2年目が2人入らないか確認
+  if (memberGroup[name2] === "A") {
+    const others1 = s1[type1].filter((n,i) => i !== idx1);
+    if (others1.some(n => memberGroup[n] === "A")) return false;
+  }
+  if (memberGroup[name1] === "A") {
+    const others2 = s2[type2].filter((n,i) => i !== idx2);
+    if (others2.some(n => memberGroup[n] === "A")) return false;
+  }
+
+  // 目標日数チェック: 平日⇔休日をまたぐ交換の場合のみ必要
+  const isHol1 = isHoliday(date1);
+  const isHol2 = isHoliday(date2);
+  if (isHol1 !== isHol2) {
+    const m1 = state.members.find(x => x.name === name1);
+    const m2 = state.members.find(x => x.name === name2);
+    if (!m1 || !m2) return false;
+    // tempSchedule から現在の勤務カウントを計算
+    const counts = {};
+    state.members.forEach(m => counts[m.name] = { weekday: 0, holiday: 0 });
+    getDates().forEach(dt => {
+      const iso = fmtISO(dt);
+      const s = sch[iso]; if (!s) return;
+      const hol = isHoliday(dt);
+      for (const t of ["day_duty","night_duty"]) {
+        (s[t]||[]).forEach(n => { if (counts[n]) { if (hol) counts[n].holiday++; else counts[n].weekday++; } });
+      }
+    });
+    const c1 = counts[name1], c2 = counts[name2];
+    const n1w = c1.weekday - (isHol1?0:1) + (isHol2?0:1);
+    const n1h = c1.holiday - (isHol1?1:0) + (isHol2?1:0);
+    const n2w = c2.weekday - (isHol2?0:1) + (isHol1?0:1);
+    const n2h = c2.holiday - (isHol2?1:0) + (isHol1?1:0);
+    if (n1w !== m1.weekdayTarget || n1h !== m1.holidayTarget) return false;
+    if (n2w !== m2.weekdayTarget || n2h !== m2.holidayTarget) return false;
+  }
+
+  // NG組合せ: 交換後のスロットでペアが同枠になるか確認
+  const slot1others = s1[type1].filter((_,i) => i !== idx1); // name1が抜けた後のslot1
+  const slot2others = s2[type2].filter((_,i) => i !== idx2); // name2が抜けた後のslot2
+  if (isPairNGConflict(name2, iso1, type1, slot1others)) return false; // name2がslot1に入る
+  if (isPairNGConflict(name1, iso2, type2, slot2others)) return false; // name1がslot2に入る
+
+  // 間隔チェック（tempScheduleを渡す）
+  if (!checkIntervalAfterSwap(name1, iso1, iso2, type1, sch)) return false;
+  if (!checkIntervalAfterSwap(name2, iso2, iso1, type2, sch)) return false;
+
+  return true;
+}
+
+// 間隔ルール以外を全てチェック（緩和候補生成用）
+function checkSwapValidSkipInterval(iso1, type1, idx1, name1, iso2, type2, idx2, name2, tempSchedule) {
+  const sch = tempSchedule || state.schedule;
+  const date1 = new Date(iso1 + "T00:00:00");
+  const date2 = new Date(iso2 + "T00:00:00");
+  const ng2to1 = state.ngDays[ngKey(name2,date1,type1)] ?? state.ngDays[ngKey(name2,date1)];
+  const ng1to2 = state.ngDays[ngKey(name1,date2,type2)] ?? state.ngDays[ngKey(name1,date2)];
+  if (ng2to1 === "NG") return false;
+  if (ng1to2 === "NG") return false;
+  const s1 = sch[iso1]; const s2 = sch[iso2];
+  if (!s1 || !s2) return false;
+  const otherType = type1 === "night_duty" ? "day_duty" : "night_duty";
+  if (s1[otherType] && s1[otherType].includes(name2)) return false;
+  if (s2[otherType] && s2[otherType].includes(name1)) return false;
+  const memberGroup = {};
+  state.members.forEach(m => memberGroup[m.name] = yearToGroup(m.year));
+  if (isFriday(date1) && !isHoliday(date1) && memberGroup[name2] === "A") return false;
+  if (isFriday(date2) && !isHoliday(date2) && memberGroup[name1] === "A") return false;
+  // 金曜1年目2名以上禁止
+  if (isFriday(date1) && !isHoliday(date1) && memberGroup[name2] === "B") {
+    const others = s1[type1].filter((n,i) => i !== idx1 && n !== name1);
+    if (others.filter(n => memberGroup[n] === "B").length >= 2) return false;
+  }
+  if (isFriday(date2) && !isHoliday(date2) && memberGroup[name1] === "B") {
+    const others = s2[type2].filter((n,i) => i !== idx2 && n !== name2);
+    if (others.filter(n => memberGroup[n] === "B").length >= 2) return false;
+  }
+  // 2年目同枠禁止
+  if (memberGroup[name2] === "A") {
+    const others1 = s1[type1].filter((n,i) => i !== idx1);
+    if (others1.some(n => memberGroup[n] === "A")) return false;
+  }
+  if (memberGroup[name1] === "A") {
+    const others2 = s2[type2].filter((n,i) => i !== idx2);
+    if (others2.some(n => memberGroup[n] === "A")) return false;
+  }
+  // 目標日数チェック（平日↔休日またぎの場合）
+  const isHol1 = isHoliday(date1), isHol2 = isHoliday(date2);
+  if (isHol1 !== isHol2) {
+    const m1 = state.members.find(x => x.name === name1);
+    const m2 = state.members.find(x => x.name === name2);
+    if (!m1 || !m2) return false;
+    const counts = {};
+    state.members.forEach(m => counts[m.name] = { weekday: 0, holiday: 0 });
+    getDates().forEach(dt => {
+      const iso = fmtISO(dt); const s = sch[iso]; if (!s) return;
+      const hol = isHoliday(dt);
+      for (const t of ["day_duty","night_duty"]) {
+        (s[t]||[]).forEach(n => { if (counts[n]) { if (hol) counts[n].holiday++; else counts[n].weekday++; } });
+      }
+    });
+    const c1 = counts[name1], c2 = counts[name2];
+    const n1w = c1.weekday - (isHol1?0:1) + (isHol2?0:1);
+    const n1h = c1.holiday - (isHol1?1:0) + (isHol2?1:0);
+    const n2w = c2.weekday - (isHol2?0:1) + (isHol1?0:1);
+    const n2h = c2.holiday - (isHol2?1:0) + (isHol1?1:0);
+    if (n1w !== m1.weekdayTarget || n1h !== m1.holidayTarget) return false;
+    if (n2w !== m2.weekdayTarget || n2h !== m2.holidayTarget) return false;
+  }
+  // pairNGチェック
+  const sl1others = s1[type1].filter((_,i) => i !== idx1);
+  const sl2others = s2[type2].filter((_,i) => i !== idx2);
+  if (isPairNGConflict(name2, iso1, type1, sl1others)) return false;
+  if (isPairNGConflict(name1, iso2, type2, sl2others)) return false;
+  return true;
+}
+
+function checkIntervalAfterSwap(name, removeISO, addISO, dutyType, sch) {
+  const schedule = sch || state.schedule;
+  const dates = getDates();
+  const cat = dutyType === "night_duty" ? "night" : "day";
+  const addDate = new Date(addISO + "T00:00:00");
+
+  const duties = [];
+  dates.forEach(dt => {
+    const iso = fmtISO(dt);
+    const s = schedule[iso];
+    if (!s) return;
+    for (const t of ["day_duty", "night_duty"]) {
+      if (s[t] && s[t].includes(name)) {
+        if (iso === removeISO && t === dutyType) continue;
+        duties.push({ date: dt, type: t === "night_duty" ? "night" : "day" });
+      }
+    }
+  });
+  duties.push({ date: addDate, type: cat });
+  duties.sort((a,b) => a.date - b.date);
+
+  for (let i = 0; i < duties.length - 1; i++) {
+    const gap = Math.abs(diffDays(duties[i+1].date, duties[i].date)) - 1;
+    const req = duties[i].type === "night" ? 3 : 2;
+    if (gap < req) return false;
+  }
+  return true;
+}
+
+// 交換後に生じる最も厳しい間隔違反を返す（違反なしはnull）
+// { minGap: 実際の中X日数, reqGap: 必要な中X日数 }
+function calcIntervalViolation(name, removeISO, addISO, dutyType, sch) {
+  const schedule = sch || state.schedule;
+  const dates = getDates();
+  const cat = dutyType === "night_duty" ? "night" : "day";
+  const addDate = new Date(addISO + "T00:00:00");
+  const duties = [];
+  dates.forEach(dt => {
+    const iso = fmtISO(dt);
+    const s = schedule[iso]; if (!s) return;
+    for (const t of ["day_duty", "night_duty"]) {
+      if (s[t] && s[t].includes(name)) {
+        if (iso === removeISO && t === dutyType) continue;
+        duties.push({ date: dt, type: t === "night_duty" ? "night" : "day" });
+      }
+    }
+  });
+  duties.push({ date: addDate, type: cat });
+  duties.sort((a, b) => a.date - b.date);
+  let worst = null;
+  for (let i = 0; i < duties.length - 1; i++) {
+    const gap = Math.abs(diffDays(duties[i+1].date, duties[i].date)) - 1;
+    const req = duties[i].type === "night" ? 3 : 2;
+    if (gap < req) {
+      if (!worst || gap < worst.minGap) worst = { minGap: gap, reqGap: req };
+    }
+  }
+  return worst; // null = 違反なし
+}
+
+// ═══════════════════════════════════════
+// 交換履歴
+// ═══════════════════════════════════════
+const MAX_HISTORY = 30;
+
+function pushHistory(label) {
+  // 最初の交換時に「生成直後」を履歴0番として保存
+  if (state.swapHistory.length === 0) {
+    state.swapHistory.push({
+      label: "生成直後",
+      schedule: JSON.parse(JSON.stringify(state.schedule)),
+      stats: JSON.parse(JSON.stringify(state.stats)),
+      warnings: [...state.warnings],
+      lastSwap: [],
+    });
+  }
+  state.swapHistory.push({
+    label,
+    schedule: JSON.parse(JSON.stringify(state.schedule)),
+    stats: JSON.parse(JSON.stringify(state.stats)),
+    warnings: [...state.warnings],
+    lastSwap: [...state.lastSwap],
+  });
+  if (state.swapHistory.length > MAX_HISTORY + 1) state.swapHistory.shift();
+  renderHistory();
+}
+
+function restoreHistory(idx) {
+  const h = state.swapHistory[idx];
+  if (!h) return;
+  state.schedule = JSON.parse(JSON.stringify(h.schedule));
+  state.stats    = JSON.parse(JSON.stringify(h.stats));
+  state.warnings = [...h.warnings];
+  state.lastSwap = [...h.lastSwap];
+  state.swapSelection = null;
+  state.previousSchedule = null;
+  // idx以降の履歴を削除
+  state.swapHistory = state.swapHistory.slice(0, idx + 1);
+  renderShift();
+  renderHistory();
+  document.getElementById("swap-panel-area").innerHTML =
+    `<div style="padding:10px 14px;background:#FFF3E0;border-radius:6px;font-size:13px;color:#E65100;margin-top:8px;">「${h.label}」の状態に戻しました</div>`;
+  setTimeout(() => { document.getElementById("swap-panel-area").innerHTML = ""; }, 2500);
+}
+
+function renderHistory() {
+  const area = document.getElementById("history-area");
+  if (!area) return;
+  if (state.swapHistory.length <= 1) { area.innerHTML = ""; return; }
+  let html = `<div style="margin-top:20px;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;">`;
+  html += `<div style="font-size:13px;font-weight:700;color:var(--primary);margin-bottom:8px;">交換履歴（${state.swapHistory.length - 1}件）</div>`;
+  html += `<div style="display:flex;flex-direction:column;gap:4px;">`;
+  // 最新が上に来るよう逆順
+  for (let i = state.swapHistory.length - 1; i >= 0; i--) {
+    const h = state.swapHistory[i];
+    const isCurrent = i === state.swapHistory.length - 1;
+    const bg = isCurrent ? "#E8F5E9" : "var(--bg)";
+    const border = isCurrent ? "1px solid #2E7D32" : "1px solid var(--border)";
+    html += `<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:${bg};border:${border};border-radius:6px;font-size:12px;">`;
+    html += `<span style="color:var(--text-muted);min-width:24px;text-align:right;">${i === 0 ? "" : i + "."}${isCurrent ? " ✓" : ""}</span>`;
+    html += `<span style="flex:1;">${h.label}</span>`;
+    if (!isCurrent) {
+      html += `<button class="btn btn-outline btn-sm" onclick="restoreHistory(${i})" style="white-space:nowrap;font-size:11px;">この状態に戻す</button>`;
+    } else {
+      html += `<span style="font-size:11px;color:var(--success);font-weight:700;">現在</span>`;
+    }
+    html += `</div>`;
+  }
+  html += `</div></div>`;
+  area.innerHTML = html;
+}
+
+function showSwapDone(msg) {
+  document.getElementById("swap-panel-area").innerHTML =
+    `<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;background:#E8F5E9;border-radius:6px;font-size:13px;color:#1B5E20;margin-top:12px;">
+      <span>${msg}</span>
+      <button class="btn btn-outline btn-sm" onclick="undoSwap()" style="margin-left:auto;white-space:nowrap;">↩ 元に戻す</button>
+    </div>`;
+}
+
+function undoSwap() {
+  if (!state.previousSchedule) return;
+  state.schedule = state.previousSchedule;
+  state.previousSchedule = null;
+  // 直前の履歴エントリを削除して整合性を保つ
+  if (state.swapHistory.length > 1) state.swapHistory.pop();
+  state.lastSwap = state.swapHistory.length > 0 ? [...(state.swapHistory[state.swapHistory.length - 1].lastSwap)] : [];
+  recalcStats();
+  state.swapSelection = null;
+  renderShift();
+  renderHistory();
+  document.getElementById("swap-panel-area").innerHTML =
+    '<div style="padding:12px;background:#FFF3E0;border-radius:6px;font-size:13px;color:#E65100;margin-top:12px;">交換を元に戻しました</div>';
+  setTimeout(() => { document.getElementById("swap-panel-area").innerHTML = ""; }, 2000);
+}
+
+function executeSwap(iso1, type1, idx1, name1, iso2, type2, idx2, name2) {
+  state.previousSchedule = JSON.parse(JSON.stringify(state.schedule));
+  state.schedule[iso1][type1][idx1] = name2;
+  state.schedule[iso2][type2][idx2] = name1;
+  state.lastSwap = [
+    { iso: iso1, dutyType: type1, name: name2 },
+    { iso: iso2, dutyType: type2, name: name1 },
+  ];
+  recalcStats();
+  pushHistory(`交換${state.swapHistory.length}: ${name1} ⇄ ${name2}`);
+  state.swapSelection = null;
+  document.getElementById("swap-popup").style.display = "none";
+  renderShift();
+  showSwapDone(`交換完了: <strong>${name1}</strong> ⇄ <strong>${name2}</strong>`);
+}
+
+// 連鎖交換: steps = [{iso1,type1,idx1,name1,iso2,type2,idx2,name2}, ...]
+function executeMultiSwap(steps) {
+  state.previousSchedule = JSON.parse(JSON.stringify(state.schedule));
+  const newLastSwap = [];
+  for (const step of steps) {
+    const i1 = state.schedule[step.iso1][step.type1].indexOf(step.name1);
+    const i2 = state.schedule[step.iso2][step.type2].indexOf(step.name2);
+    if (i1 < 0 || i2 < 0) {
+      state.previousSchedule = null;
+      alert('連鎖交換の一部が実行できませんでした（シフトを再生成してください）');
+      return;
+    }
+    state.schedule[step.iso1][step.type1][i1] = step.name2;
+    state.schedule[step.iso2][step.type2][i2] = step.name1;
+    newLastSwap.push({ iso: step.iso1, dutyType: step.type1, name: step.name2 });
+    newLastSwap.push({ iso: step.iso2, dutyType: step.type2, name: step.name1 });
+  }
+  state.lastSwap = newLastSwap;
+  recalcStats();
+  const chainNames = steps.map(s => `${s.name1}⇄${s.name2}`).join(' / ');
+  pushHistory(`交換${state.swapHistory.length}: ${chainNames}`);
+  state.swapSelection = null;
+  document.getElementById("swap-popup").style.display = "none";
+  renderShift();
+  const names = steps.map(s => `<strong>${s.name1}</strong>⇄<strong>${s.name2}</strong>`).join(' / ');
+  showSwapDone(`連鎖交換完了: ${names}`);
+}
+
+function recalcStats() {
+  const dates = getDates();
+  const stats = {};
+  state.members.forEach(m => { stats[m.name] = { weekday:0, holiday:0, total:0, weekdayTarget:m.weekdayTarget, holidayTarget:m.holidayTarget }; });
+
+  dates.forEach(dt => {
+    const iso = fmtISO(dt);
+    const s = state.schedule[iso];
+    const isHol = isHoliday(dt);
+    for (const t of ["day_duty","night_duty"]) {
+      s[t].forEach(name => {
+        if (stats[name]) {
+          if (isHol) stats[name].holiday++;
+          else stats[name].weekday++;
+          stats[name].total++;
+        }
+      });
+    }
+  });
+
+  state.stats = stats;
+  state.warnings = [];
+  dates.forEach(dt => {
+    const iso = fmtISO(dt);
+    const s = state.schedule[iso];
+    for (const t of ["day_duty","night_duty"]) {
+      s[t].forEach(name => {
+        const ngRecalc = state.ngDays[ngKey(name, dt, t)] ?? state.ngDays[ngKey(name, dt)];
+        if (ngRecalc === "希望休") {
+          state.warnings.push(`${name}: ${fmtJP(dt)} (${t==="night_duty"?"当直":"日直"}) - 希望休だが割当`);
+        }
+      });
+    }
+  });
+  // 勤務回数遠脱も警告として表示
+  state.members.forEach(m => {
+    const s = state.stats[m.name];
+    if (s.weekday !== s.weekdayTarget) state.warnings.push(`${m.name}: 平日回数 実績${s.weekday}回 / 目標${s.weekdayTarget}回`);
+    if (s.holiday !== s.holidayTarget) state.warnings.push(`${m.name}: 休日回数 実績${s.holiday}回 / 目標${s.holidayTarget}回`);
+  });
+
+  // 間隔違反チェック（中1日など）
+  state.members.forEach(m => {
+    const duties = [];
+    dates.forEach(dt => {
+      const iso = fmtISO(dt);
+      const s = state.schedule[iso];
+      if (s.night_duty.includes(m.name)) duties.push({ date: dt, iso, type: "night", label: "当直" });
+      if (s.day_duty.includes(m.name))   duties.push({ date: dt, iso, type: "day",   label: "日直" });
+    });
+    duties.sort((a, b) => a.date - b.date);
+    for (let i = 0; i < duties.length - 1; i++) {
+      const gap = Math.round((duties[i+1].date - duties[i].date) / 86400000) - 1;
+      const req = duties[i].type === "night" ? 3 : 2;
+      if (gap < req) {
+        const actual = gap === 1 ? "中1日" : gap === 0 ? "連日" : `中${gap}日`;
+        const need   = duties[i].type === "night" ? "中3日必要" : "中2日必要";
+        state.warnings.push(`interval:${m.name}: ${fmtJP(duties[i].date)}${duties[i].label} → ${fmtJP(duties[i+1].date)}${duties[i+1].label}（${actual} / ${need}）`);
+      }
+    }
+  });
+}
+
+// ═══════════════════════════════════════
+// レンダリング
+// ═══════════════════════════════════════
+
+function renderShift() {
+  if (!state.schedule) { document.getElementById("shift-result").innerHTML = ""; document.getElementById("swap-hint").style.display="none"; return; }
+
+  document.getElementById("swap-hint").style.display = "block";
+  const dates = getDates();
+  const memberGroup = {};
+  state.members.forEach(m => memberGroup[m.name] = yearToGroup(m.year));
+  const sel = state.swapSelection;
+
+  let html = '<table><thead><tr><th>日付</th><th>曜日</th><th>種別</th><th>日直①</th><th>日直②</th><th>当直①</th><th>当直②</th></tr></thead><tbody>';
+
+  dates.forEach(dt => {
+    const iso = fmtISO(dt);
+    const s = state.schedule[iso] || { day_duty: [], night_duty: [] };
+    const hol = isHoliday(dt);
+    const rowClass = hol ? ' class="weekend"' : '';
+
+    const d1 = s.day_duty[0]||"", d2 = s.day_duty[1]||"", n1 = s.night_duty[0]||"", n2 = s.night_duty[1]||"";
+
+    function mkCell(name, dutyType, slotIdx, isGray) {
+      const cls = [];
+      if (isGray) cls.push("gray-cell");
+      if (name && memberGroup[name] === "A") cls.push("a-member");
+      if (name) cls.push("clickable");
+      if (sel && sel.iso === iso && sel.dutyType === dutyType && sel.slotIdx === slotIdx) cls.push("selected-swap");
+      if (name && state.lastSwap.some(s => s.iso === iso && s.dutyType === dutyType && s.name === name)) cls.push("swap-done");
+      // 希望休割当チェック
+      let hopeAssigned = false;
+      if (name) {
+        const ngVal = state.ngDays[ngKey(name, dt, dutyType)] ?? state.ngDays[ngKey(name, dt)];
+        if (ngVal === "希望休") hopeAssigned = true;
+      }
+      if (hopeAssigned) cls.push("hope-assigned");
+      const clsStr = cls.length ? ` class="${cls.join(" ")}"` : "";
+      const onclick = name ? ` onclick="selectForSwap(event,'${iso}','${dutyType}',${slotIdx},'${name}')"` : "";
+      const label = name ? (hopeAssigned ? `${name}<span class="hope-mark" title="希望休だが割当">⚠</span>` : name) : "";
+      return `<td${clsStr}${onclick}>${label}</td>`;
+    }
+
+    html += `<tr${rowClass}>`;
+    html += `<td>${fmtJP(dt)}</td><td>${dayName(dt)}</td><td>${hol?"休日":"平日"}</td>`;
+    html += mkCell(d1, "day_duty", 0, !hol);
+    html += mkCell(d2, "day_duty", 1, !hol);
+    html += mkCell(n1, "night_duty", 0, false);
+    html += mkCell(n2, "night_duty", 1, false);
+    html += '</tr>';
+  });
+
+  html += '</tbody></table>';
+  document.getElementById("shift-result").innerHTML = html;
+
+  // 統計
+  let shtml = '<h3 class="section-title" style="margin-top:24px;">割当統計</h3>';
+  shtml += '<table class="stats-table"><thead><tr><th>名前</th><th>年次</th><th>平日実績</th><th>平日目標</th><th>休日実績</th><th>休日目標</th><th>合計</th></tr></thead><tbody>';
+  state.members.forEach(m => {
+    const s = state.stats[m.name];
+    const wCls = s.weekday !== s.weekdayTarget ? ' class="mismatch"' : '';
+    const hCls = s.holiday !== s.holidayTarget ? ' class="mismatch"' : '';
+    shtml += `<tr><td>${m.name}</td><td>${m.year}年目</td><td${wCls}>${s.weekday}</td><td>${s.weekdayTarget}</td><td${hCls}>${s.holiday}</td><td>${s.holidayTarget}</td><td>${s.total}</td></tr>`;
+  });
+  shtml += '</tbody></table>';
+  document.getElementById("stats-result").innerHTML = shtml;
+
+  // 希望休警告・勤務回数不一致・間隔違反を分けて表示
+  const hopeWarns     = state.warnings.filter(x => x.includes("希望休だが割当"));
+  const intervalWarns = state.warnings.filter(x => x.startsWith("interval:")).map(x => x.replace(/^interval:/, ""));
+  const countWarns    = state.warnings.filter(x => !x.includes("希望休だが割当") && !x.startsWith("interval:"));
+  let wHtml = "";
+  if (hopeWarns.length > 0) {
+    wHtml += '<div class="warning-box"><h3>⚠️ 希望休が通らなかった割当（' + hopeWarns.length + '件）</h3>';
+    hopeWarns.forEach(x => wHtml += `<div>▶ ${x}</div>`);
+    wHtml += '</div>';
+  }
+  if (countWarns.length > 0) {
+    wHtml += '<div class="warning-box" style="border-color:#C62828;"><h3 style="color:#C62828;">⚠️ 勤務回数不一致</h3>';
+    countWarns.forEach(x => wHtml += `<div>▶ ${x}</div>`);
+    wHtml += '</div>';
+  }
+  if (intervalWarns.length > 0) {
+    wHtml += '<div class="warning-box" style="border-color:#F57F17;background:#FFFDE7;"><h3 style="color:#F57F17;">⚠️ 間隔ルール違反（' + intervalWarns.length + '件）</h3>';
+    intervalWarns.forEach(x => wHtml += `<div style="color:#E65100;">▶ ${x}</div>`);
+    wHtml += '</div>';
+  }
+  document.getElementById("warnings-result").innerHTML = wHtml;
+}
+
+function renderMemberTable() {
+  let html = '<table class="member-table"><thead><tr><th>No.</th><th>名前</th><th>年次</th><th>平日回数</th><th>休日回数</th><th></th></tr></thead><tbody>';
+  state.members.forEach((m, i) => {
+    const yrCls = (m.year ?? 1) >= 2 ? ' class="group-a"' : '';
+    html += `<tr><td>${i+1}</td><td>${m.name}</td>`;
+    html += `<td${yrCls}><select onchange="updateMember(${i},'year',this.value)" style="width:70px;border:1px solid var(--border);border-radius:4px;padding:4px;font-size:13px;"><option value="1" ${(m.year??1)===1?'selected':''}>1年目</option><option value="2" ${(m.year??1)===2?'selected':''}>2年目</option></select></td>`;
+    html += `<td><input type="number" min="0" max="10" value="${m.weekdayTarget}" onchange="updateMember(${i},'weekday',this.value)"></td>`;
+    html += `<td><input type="number" min="0" max="10" value="${m.holidayTarget}" onchange="updateMember(${i},'holiday',this.value)"></td>`;
+    html += `<td><button class="btn btn-outline btn-sm" onclick="removeMember(${i})" style="color:#B71C1C;border-color:#FFCDD2;">削除</button></td></tr>`;
+  });
+  html += '</tbody></table>';
+  html += `
+  <div style="margin-top:16px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;">
+    <span style="font-size:14px;font-weight:500;">メンバー追加：</span>
+    <input type="text" id="new-member-name" placeholder="名前" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:14px;width:130px;">
+    <select id="new-member-year" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:14px;">
+      <option value="1">1年目</option>
+      <option value="2">2年目</option>
+    </select>
+    <button class="btn btn-primary" onclick="addMember()">＋ 追加</button>
+  </div>`;
+  document.getElementById("member-table-wrap").innerHTML = html;
+}
+
+function addMember() {
+  const nameInput = document.getElementById("new-member-name");
+  const yearSelect = document.getElementById("new-member-year");
+  const name = nameInput.value.trim();
+  const year = parseInt(yearSelect.value) || 1;
+  if (!name) { alert("名前を入力してください"); return; }
+  if (state.members.some(m => m.name === name)) { alert(`「${name}」はすでに登録されています`); return; }
+  state.members.push({ name, year, weekdayTarget: 2, holidayTarget: 2 });
+  renderMemberTable();
+  renderNGTable();
+}
+
+function removeMember(idx) {
+  const name = state.members[idx].name;
+  if (!confirm(`「${name}」をメンバーから削除しますか？`)) return;
+  // この人のNG日設定も合わせて削除
+  Object.keys(state.ngDays).forEach(key => {
+    if (key.startsWith(name + "_")) delete state.ngDays[key];
+  });
+  state.members.splice(idx, 1);
+  renderMemberTable();
+  renderNGTable();
+}
+
+function updateMember(idx, field, val) {
+  const v = parseInt(val) || 0;
+  if (field === "weekday") state.members[idx].weekdayTarget = v;
+  else if (field === "holiday") state.members[idx].holidayTarget = v;
+  else if (field === "year") state.members[idx].year = Math.max(1, v);
+}
+
+// ── NG組合せ ──
+function renderPairNGTable() {
+  // セレクトボックスにメンバー名を入れる
+  ["pairng-member1","pairng-member2"].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const cur = sel.value;
+    sel.innerHTML = state.members.map(m => `<option value="${m.name}">${m.name}（${m.year}年目）</option>`).join("");
+    if (cur) sel.value = cur;
+  });
+
+  const wrap = document.getElementById("pairng-table-wrap");
+  if (!wrap) return;
+  if (state.pairNG.length === 0) {
+    wrap.innerHTML = '<p style="font-size:13px;color:var(--text-muted);padding:8px 0;">まだNG組合せはありません。</p>';
+    return;
+  }
+  let html = '<table><thead><tr><th>メンバー1</th><th></th><th>メンバー2</th><th></th></tr></thead><tbody>';
+  state.pairNG.forEach((p, i) => {
+    html += `<tr><td style="font-weight:500;">${p.name1}</td><td style="color:var(--ng-text);font-weight:700;">NG</td><td style="font-weight:500;">${p.name2}</td>`;
+    html += `<td><button class="btn btn-outline btn-sm" onclick="removePairNG(${i})" style="color:#B71C1C;border-color:#FFCDD2;">削除</button></td></tr>`;
+  });
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+}
+
+function addPairNG() {
+  const n1 = document.getElementById("pairng-member1").value;
+  const n2 = document.getElementById("pairng-member2").value;
+  if (n1 === n2) { alert("同じメンバーは選べません"); return; }
+  if (state.pairNG.some(p =>
+    (p.name1 === n1 && p.name2 === n2) || (p.name1 === n2 && p.name2 === n1)
+  )) { alert("すでに登録されている組合せです"); return; }
+  state.pairNG.push({ name1: n1, name2: n2 });
+  renderPairNGTable();
+}
+
+function removePairNG(idx) {
+  state.pairNG.splice(idx, 1);
+  renderPairNGTable();
+}
+
+// ── NG日テーブル（ワンクリック切替） ──
+// 休日: 日直・当直の2行を表示 / 平日: 当直1行
+function renderNGTable() {
+  const dates = getDates();
+  let html = '<table class="ng-table"><thead><tr><th>日付</th><th>曜日</th><th>勤務</th>';
+  state.members.forEach(m => { html += `<th>${m.name}</th>`; });
+  html += '</tr></thead><tbody>';
+
+  dates.forEach(dt => {
+    const hol = isHoliday(dt);
+    const iso = fmtISO(dt);
+    const rowClass = hol ? ' class="weekend"' : '';
+
+    if (hol) {
+      // 休日: 日直行
+      html += `<tr${rowClass}>`;
+      html += `<td rowspan="2">${fmtJP(dt)}</td><td rowspan="2">${dayName(dt)}</td>`;
+      html += `<td style="font-size:11px;white-space:nowrap;">日直</td>`;
+      state.members.forEach(m => {
+        const key = ngKey(m.name, dt, "day_duty");
+        const val = state.ngDays[key] || "";
+        let cls = "", label = "ー";
+        if (val === "NG") { cls = "val-ng"; label = "NG"; }
+        else if (val === "希望休") { cls = "val-hope"; label = "希望休"; }
+        html += `<td><div class="ng-cell ${cls}" onclick="toggleNG('${m.name}','${iso}','day_duty',this)">${label}</div></td>`;
+      });
+      html += '</tr>';
+
+      // 休日: 当直行
+      html += `<tr${rowClass}>`;
+      html += `<td style="font-size:11px;white-space:nowrap;">当直</td>`;
+      state.members.forEach(m => {
+        const key = ngKey(m.name, dt, "night_duty");
+        const val = state.ngDays[key] || "";
+        let cls = "", label = "ー";
+        if (val === "NG") { cls = "val-ng"; label = "NG"; }
+        else if (val === "希望休") { cls = "val-hope"; label = "希望休"; }
+        html += `<td><div class="ng-cell ${cls}" onclick="toggleNG('${m.name}','${iso}','night_duty',this)">${label}</div></td>`;
+      });
+      html += '</tr>';
+    } else {
+      // 平日: 当直のみ1行
+      html += `<tr>`;
+      html += `<td>${fmtJP(dt)}</td><td>${dayName(dt)}</td>`;
+      html += `<td style="font-size:11px;white-space:nowrap;">当直</td>`;
+      state.members.forEach(m => {
+        const key = ngKey(m.name, dt, "night_duty");
+        const val = state.ngDays[key] || "";
+        let cls = "", label = "ー";
+        if (val === "NG") { cls = "val-ng"; label = "NG"; }
+        else if (val === "希望休") { cls = "val-hope"; label = "希望休"; }
+        html += `<td><div class="ng-cell ${cls}" onclick="toggleNG('${m.name}','${iso}','night_duty',this)">${label}</div></td>`;
+      });
+      html += '</tr>';
+    }
+  });
+
+  html += '</tbody></table>';
+  document.getElementById("ng-table-wrap").innerHTML = html;
+}
+
+function toggleNG(name, iso, dutyType, el) {
+  const key = ngKey(name, new Date(iso + "T00:00:00"), dutyType);
+  const current = state.ngDays[key] || "";
+  let next, cls, label;
+
+  if (current === "") { next = "NG"; cls = "val-ng"; label = "NG"; }
+  else if (current === "NG") { next = "希望休"; cls = "val-hope"; label = "希望休"; }
+  else { next = ""; cls = ""; label = "ー"; }
+
+  if (next) state.ngDays[key] = next;
+  else delete state.ngDays[key];
+
+  el.className = "ng-cell " + cls;
+  el.textContent = label;
+}
+
+function renderHolidayList() {
+  document.getElementById("holiday-list").innerHTML = state.extraHolidays.map((h, i) =>
+    `<span class="holiday-tag">${fmtJP(h.date)}${h.memo?" ("+h.memo+")":""}<button onclick="removeHoliday(${i})">×</button></span>`
+  ).join("");
+}
+
+function addHoliday() {
+  const di = document.getElementById("holiday-date");
+  const mi = document.getElementById("holiday-memo");
+  if (!di.value) return;
+  state.extraHolidays.push({ date: new Date(di.value + "T00:00:00"), memo: mi.value });
+  di.value = ""; mi.value = "";
+  renderHolidayList(); renderNGTable();
+}
+
+function removeHoliday(idx) {
+  state.extraHolidays.splice(idx, 1);
+  renderHolidayList(); renderNGTable();
+}
+
+function applyPeriod() {
+  state.startDate = new Date(document.getElementById("start-date").value + "T00:00:00");
+  state.endDate = new Date(document.getElementById("end-date").value + "T00:00:00");
+  state.schedule = null; state.stats = null; state.warnings = [];
+  renderNGTable(); renderShift();
+}
+
+// ═══════════════════════════════════════
+// Excelダウンロード
+// ═══════════════════════════════════════
+function downloadExcel() {
+  if (!state.schedule) { alert("先にシフトを生成してください。"); return; }
+  const wb = XLSX.utils.book_new();
+  const dates = getDates();
+  const sd = [["日付","曜日","種別","日直①","日直②","当直①","当直②"]];
+  dates.forEach(dt => {
+    const s = state.schedule[fmtISO(dt)];
+    sd.push([fmtJP(dt),dayName(dt),isHoliday(dt)?"休日":"平日", s.day_duty[0]||"",s.day_duty[1]||"",s.night_duty[0]||"",s.night_duty[1]||""]);
+  });
+  const ws1 = XLSX.utils.aoa_to_sheet(sd);
+  ws1["!cols"]=[{wch:10},{wch:6},{wch:6},{wch:10},{wch:10},{wch:10},{wch:10}];
+  XLSX.utils.book_append_sheet(wb, ws1, "シフト表");
+
+  const std = [["名前","グループ","平日実績","平日目標","休日実績","休日目標","合計"]];
+  state.members.forEach(m => {
+    const s = state.stats[m.name];
+    std.push([m.name,m.group,s.weekday,s.weekdayTarget,s.holiday,s.holidayTarget,s.total]);
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(std), "統計");
+  XLSX.writeFile(wb, "シフト表.xlsx");
+}
+
+// ═══════════════════════════════════════
+// タブ切替
+// ═══════════════════════════════════════
+document.querySelectorAll(".tab").forEach(tab => {
+  tab.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+    document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+    tab.classList.add("active");
+    document.getElementById("panel-" + tab.dataset.tab).classList.add("active");
+    if (tab.dataset.tab === "pairng") renderPairNGTable();
+  });
+});
+
+// ═══════════════════════════════════════
+// 保存・読み込み
+// ═══════════════════════════════════════
+const STORAGE_KEY = "shift_app_state_v1";
+
+function stateToObj() {
+  return {
+    startDate: state.startDate.toISOString(),
+    endDate:   state.endDate.toISOString(),
+    extraHolidays: state.extraHolidays.map(h => ({ date: h.date.toISOString(), memo: h.memo })),
+    members:  state.members,
+    ngDays:   state.ngDays,
+    pairNG:   state.pairNG,
+    schedule: state.schedule,
+    stats:    state.stats,
+    warnings: state.warnings,
+  };
+}
+
+function applyObj(obj) {
+  state.startDate     = new Date(obj.startDate);
+  state.endDate       = new Date(obj.endDate);
+  state.extraHolidays = (obj.extraHolidays || []).map(h => ({ date: new Date(h.date), memo: h.memo }));
+  state.members       = obj.members  || [];
+  state.ngDays        = obj.ngDays   || {};
+  state.pairNG        = obj.pairNG   || [];
+  state.schedule      = obj.schedule || null;
+  state.stats         = obj.stats    || null;
+  state.warnings      = obj.warnings || [];
+  state.swapSelection    = null;
+  state.previousSchedule = null;
+  // 日付入力欄も更新
+  document.getElementById("start-date").value = fmtISO(state.startDate);
+  document.getElementById("end-date").value   = fmtISO(state.endDate);
+  renderMemberTable();
+  renderNGTable();
+  renderHolidayList();
+  if (state.schedule) renderShift();
+}
+
+// ── ブラウザ保存（localStorage）──
+function saveToLocalStorage() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToObj()));
+    showToast("ブラウザに保存しました");
+  } catch(e) {
+    alert("保存に失敗しました: " + e.message);
+  }
+}
+
+function loadFromLocalStorage() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) { alert("保存データが見つかりません"); return; }
+    if (!confirm("ブラウザの保存データを復元します。現在の内容は上書きされますがよろしいですか？")) return;
+    applyObj(JSON.parse(raw));
+    showToast("復元しました");
+  } catch(e) {
+    alert("読み込みに失敗しました: " + e.message);
+  }
+}
+
+// ── JSONファイル保存・読み込み ──
+function exportJSON() {
+  const blob = new Blob([JSON.stringify(stateToObj(), null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "shift_" + fmtISO(new Date()) + ".json";
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function importJSON() {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = ".json";
+  input.onchange = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!confirm("JSONファイルを読み込みます。現在の内容は上書きされますがよろしいですか？")) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        applyObj(JSON.parse(ev.target.result));
+        showToast("JSONを読み込みました");
+      } catch(err) {
+        alert("読み込みに失敗しました: " + err.message);
+      }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
+}
+
+// ── トースト通知 ──
+function showToast(msg) {
+  let t = document.getElementById("save-toast");
+  if (!t) {
+    t = document.createElement("div");
+    t.id = "save-toast";
+    t.style.cssText = "position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#323232;color:#fff;padding:10px 20px;border-radius:6px;font-size:13px;z-index:99999;transition:opacity .3s;";
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.opacity = "1";
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => { t.style.opacity = "0"; }, 2500);
+}
+
+// ── 起動時に自動復元（保存データがあれば）──
+let _autoLoaded = false;
+(function autoLoad() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    applyObj(JSON.parse(raw));
+    _autoLoaded = true;
+  } catch(e) { /* 無視 */ }
+})();
+
+// ポップアップ外クリックで閉じる
+document.addEventListener("mousedown", e => {
+  const popup = document.getElementById("swap-popup");
+  if (popup.style.display === "block" && !popup.contains(e.target)) {
+    closeSwapPopup();
+  }
+});
+
+// 初期レンダリング（autoLoadで applyObj が呼ばれていない場合のみ）
+if (!_autoLoaded) {
+  renderMemberTable();
+  renderNGTable();
+  renderHolidayList();
+}
+</script>
+<script data-pplx-inline-edit>
+(function(){
+  if(window===window.top)return;
+  function inlineAll(orig,clone){
+    if(orig.nodeType!==1)return;
+    try{
+      var cs=getComputedStyle(orig);
+      var t='';
+      for(var i=0;i<cs.length;i++){t+=cs[i]+':'+cs.getPropertyValue(cs[i])+';';}
+      clone.style.cssText=t;
+    }catch(e){}
+    var oc=orig.children,cc=clone.children;
+    for(var j=0;j<oc.length&&j<cc.length;j++){inlineAll(oc[j],cc[j]);}
+  }
+  function stripExternal(clone){
+    var imgs=clone.querySelectorAll('img');
+    for(var i=0;i<imgs.length;i++){
+      var s=imgs[i].getAttribute('src');
+      if(s&&!s.startsWith('data:'))imgs[i].removeAttribute('src');
+    }
+    var all=clone.querySelectorAll('*');
+    for(var i=0;i<all.length;i++){
+      var st=all[i].style.cssText;
+      if(st&&st.indexOf('url(')>=0){
+        all[i].style.cssText=st.replace(/url\(["']?(?!data:)[^)"']*["']?\)/gi,'none');
+      }
+    }
+  }
+  var scrollRaf=0;
+  function emitScroll(){
+    scrollRaf=0;
+    var x=window.scrollX||window.pageXOffset||0;
+    var y=window.scrollY||window.pageYOffset||0;
+    window.parent.postMessage({type:'INLINE_EDIT_SCROLL',scrollX:x,scrollY:y},'*');
+  }
+  window.addEventListener('scroll',function(){
+    if(scrollRaf)return;
+    scrollRaf=requestAnimationFrame(emitScroll);
+  },{passive:true,capture:true});
+  emitScroll();
+  window.addEventListener('message',function(e){
+    if(!e.data||e.data.type!=='INLINE_EDIT_CAPTURE_REQUEST')return;
+    var scrollX=window.scrollX||window.pageXOffset||0;
+    var scrollY=window.scrollY||window.pageYOffset||0;
+    var w=window.innerWidth,h=window.innerHeight;
+    try{
+      var clone=document.documentElement.cloneNode(true);
+      var rm=clone.querySelectorAll('script,link[rel="stylesheet"],style');
+      for(var i=0;i<rm.length;i++){rm[i].remove();}
+      inlineAll(document.documentElement,clone);
+      stripExternal(clone);
+      var html=new XMLSerializer().serializeToString(clone);
+      var svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+w+'" height="'+h+'">'
+        +'<foreignObject width="100%" height="100%">'
+        +'<div xmlns="http://www.w3.org/1999/xhtml" style="width:'+w+'px;height:'+h+'px;overflow:hidden">'
+        +'<div style="transform:translate(-'+scrollX+'px,-'+scrollY+'px);transform-origin:top left">'
+        +html+'</div></div></foreignObject></svg>';
+      var svgUrl='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
+      var img=new Image();
+      img.onload=function(){
+        var c=document.createElement('canvas');c.width=w;c.height=h;
+        c.getContext('2d').drawImage(img,0,0);
+        window.parent.postMessage({type:'INLINE_EDIT_SCREENSHOT_RESULT',dataUrl:c.toDataURL('image/png'),scrollX:scrollX,scrollY:scrollY},'*');
+      };
+      img.onerror=function(){
+        window.parent.postMessage({type:'INLINE_EDIT_SCREENSHOT_RESULT',dataUrl:null,scrollX:scrollX,scrollY:scrollY},'*');
+      };
+      img.src=svgUrl;
+    }catch(err){
+      window.parent.postMessage({type:'INLINE_EDIT_SCREENSHOT_RESULT',dataUrl:null,scrollX:scrollX,scrollY:scrollY},'*');
+    }
+  });
+})();
+</script></body>
+</html>
